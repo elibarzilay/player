@@ -240,6 +240,7 @@ const expandDir = (elt = $.selected, info = getInfo(elt), expand = null) => {
 };
 
 const showOnly = (elt = $.selected, info = getInfo(elt)) => {
+  const elt0 = elt;
   const toSelect = elt.parentElement.classList.contains("only")
                    && nextItem(elt, true);
   for (const e of $main.querySelectorAll(".open"))
@@ -254,6 +255,7 @@ const showOnly = (elt = $.selected, info = getInfo(elt)) => {
     elt = elt.parentElement;
   }
   if (toSelect) toSelect.focus();
+  else nextItem(elt0, true).focus();
 };
 
 const mainOp = (elt = $.selected, info = getInfo(elt)) =>
