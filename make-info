@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+
+# Useful if there are warnings about inaccurate durations -- fix with:
+# for a in **/*.mp3; do
+#   ffmpeg -i "$a" -acodec copy xxx.mp3 && mv xxx.mp3 "$a"; done
+
+here="$(cd $(dirname "$0"); pwd)"
+cd "$here/.."; music="$(pwd)"
+images="$here/images" image_size="480,80"
+shopt -s nullglob
+
+full="."
+
+failwith() { printf '[%s] %s\n' "$(pwd)" "$*" 1>&2; exit 1; }
+
+# https://trac.ffmpeg.org/wiki/Waveform
+tmpimage="/tmp/waveform.png" tmpdata="/tmp/waveform-data"
+plot=''
+plot+='set terminal png size '"$image_size"' transparent;'
+plot+='set output "'"$tmpimage"'";'
+plot+='unset key;unset tics;unset border;'
+plot+='set lmargin 0;set rmargin 0;set tmargin 0;set bmargin 0;'
+plot+='plot "<cat" binary filetype=bin format="%int16" endian=little array=1:0'
+plot+='linetype rgb "white" with lines;'
+gen_image() {
+  local image="$images/${PWD#"$music"/}/${1%.*}.png"
+  if [[ -e "$image" && "$image" -nt "$1" ]]; then return; fi
+  echo "### $image ###"
+  mkdir -p "$(dirname "$image")"
+  # ffmpeg -i /tmp/x.mp3 \
+  #        -filter_complex "compand,showwavespic=s=640x320" -frames:v 1 \
+  #        output.png
+  ffmpeg -i "$1" -ac 1 -filter:a aresample=8000 -map 0:a -c:a pcm_s16le \
+         -hide_banner -loglevel warning \
+         -f data "$tmpdata"
+  gnuplot -e "$plot" < "$tmpdata"; rm "$tmpdata"
+
+  if [[ ! -e "$image" ]] \
+     || ! diff -q "$tmpimage" "$image" 2>&1 > /dev/null; then
+    mv "$tmpimage" "$image"
+  else
+    rm "$tmpimage"
+  fi
+
+}
+
+fmt="format_tags=title,track,album,artist,genre,date : format=duration"
+fields=" title track album artist genre date duration "
+extras=" tracknumber totaltracks tracktotal albumartist album_artist "
+
+audio_info() {
+  local info=() x
+  mapfile -t info < <(
+    ffprobe -hide_banner -loglevel warning \
+            -show_entries "$fmt" -print_format flat "$1")
+  if [[ "$1" = *.ogg ]]; then
+    mapfile -t -O "${#info[@]}" info < <(vorbiscomment -el "$1")
+  fi
+  local title="" track="" album="" artist="" genre="" date="" duration="" \
+    tracknumber="" totaltracks="" tracktotal="" albumartist="" album_artist=""
+  for x in "${info[@]}"; do
+    x="${x#format.tags.}"; x="${x#format.}"
+    if [[ "$x" = "="* ]]; then continue; fi
+    local k="${x%%=*}" v="${x#*=}"; k="${k,,}"
+    if [[ "$v" = \"*\" ]]; then v="${v:1:-1}"; fi
+    if [[ "$v" = *[\\\"]* ]]; then
+      if [[ "$v" = \"*\" ]]; then v="${v:1:-1}"; fi
+      if [[ "$v" = \\\"*\\\" ]]; then v="${v:2:-2}"; fi
+      v="$(echo "$v" | sed -e 's_\\\(.\)_\1_g' -e 's_[\\\"]_\\&_g')"
+    fi
+    if [[ "$fields $extras" = *" $k "* ]]; then printf -v "$k" "%s" "$v"; fi
+  done
+  if [[ -z "$track" && -n "$tracknumber" ]]; then track="$tracknumber"; fi
+  if [[ "$track" != */* ]]; then
+    if   [[ -n "$totaltracks" ]]; then track="$track/$totaltracks"
+    elif [[ -n "$tracktotal"  ]]; then track="$track/$tracktotal"
+    fi
+    track="${track/\"\/\"/\/}"
+  fi
+  if [[ -z "$artist" ]]; then
+    # there are very few uses of albumartist that are legitimately
+    # different than $artist, usually it's the same meaning
+    if   [[ -n "$albumartist"  ]]; then artist="$albumartist"
+    elif [[ -n "$album_artist" ]]; then artist="$album_artist"
+    fi
+  fi
+  for k in $fields; do
+    if [[ -n "${!k}" ]]; then printf ', "%s": "%s"' "$k" "${!k}" 1>&5; fi
+  done
+}
+
+file() {
+  local sfx="${1##*.}" type extra=""
+  case "$sfx" in
+    ( "mp3" | "ogg" | "wma" ) type="audio" extra=audio_info; gen_image "$1" ;;
+    ( "jpg" | "png"         ) type="image" ;;
+    ( "mpg"                 ) type="video" ;;
+    ( "pdf" | "txt" | "flp" ) type="other" ;;
+    ( * ) failwith "unknown file suffix: $1" ;;
+  esac
+  printf '{"name": "%s",\n%s "type": "%s"' "$1" "$indent" "$type" 1>&5
+  if [[ -n "$extra" ]]; then "$extra" "$1" 1>&5; fi
+  printf '}' 1>&5
+}
+
+dir() {
+  local f owd fst=1 indent="$1" dir="$2"
+  printf '{"name": "%s", "type": "dir",' "$dir"        1>&5
+  printf '\n%s "children": [' "$indent" 1>&5
+  printf '\n%s  ' "$indent"             1>&5
+  indent+="  "
+  owd="$PWD"; cd "$dir"
+  pwd 1>&2
+  for f in *; do
+    if [[ "$f" = "_"* ]]; then continue; fi
+    if ! ((fst)); then printf ',\n%s' "$indent" 1>&5; fi; fst=0
+    if [[ -f "$f" ]]; then file "$f"; else dir "$indent" "$f"; fi
+  done
+  cd "$owd"; printf ']}' 1>&5
+}
+dir "" . 5> "$here/new-info"
+
+jq . < "$here/new-info" > /dev/null || failwith "produced broken json"
+
+if [[ ! -e "$here/info" ]] \
+     || ! diff -q "$here/new-info" "$here/info" 2>&1 > /dev/null; then
+  mv "$here/new-info" "$here/info"
+else
+  echo "No changes"
+  rm "$here/new-info"
+fi
