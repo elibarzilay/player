@@ -1,6 +1,5 @@
 "use strict";
 
-// !!! fade in/out on pause/unpause
 // !!! C-Enter: copy item to playlist (and on playlist: reveal item in list)
 //     Only for .type == "audio"
 //     Delete on playlist: remove item
@@ -101,10 +100,10 @@ const play = (elt = $.selected) => {
   if (typeof elt == "string") elt = $(elt);
   if (!elt || getInfo(elt).type != "audio") return;
   const path = elt.id;
-  $player.src = path; $player.play().then(startVisualizer).catch(e => {
+  $.player = elt;
+  $player.src = path; playerPlay().then(startVisualizer).catch(e => {
     if (e.code != e.ABORT_ERR) throw e; });
   $("wave-image").src = "/images" + path.replace(/[.][^.]+$/, ".png");
-  $.player = elt;
   setBackgroundImageLoop(1000);
 };
 
@@ -140,15 +139,38 @@ const setBackgroundImage = (eltOrPath = $.player) => {
   unders[0].style.opacity = 1.0;
 };
 
+const fadeTo = (tgt, cb) => {
+  fadeTo.target = tgt;
+  fadeTo.cb = cb;
+  const fade = ()=> {
+    player.volume =
+      clip01(player.volume + (player.volume < fadeTo.target ? +0.02 : -0.02));
+    if (player.volume == fadeTo.target) {
+      fadeTo.timer = null;
+      if (fadeTo.cb) fadeTo.cb();
+      return;
+    }
+    fadeTo.timer = setTimeout(fade, 10);
+  };
+  if (!fadeTo.timer) fadeTo.timer = setTimeout(fade, 0);
+};
+
 const playerStop = ()=> {
   if (!$.player) return;
   if (!$player.paused) $player.pause();
   $player.currentTime = 0;
 };
-const playerPause = ()=> $.player && $player.pause();
-const playerPlay  = ()=> $.player ? $player.play() : play();
+const playerPause = ()=> {
+  if (!$.player) return;
+  fadeTo(0, () => player.pause());
+};
+const playerPlay  = ()=> {
+  if (!$.player) return play();
+  if ($player.currentTime > 0) fadeTo(1); else player.volume = 1;
+  return player.play();
+};
 const playerPlayPause = ()=>
-  $.player && ($player.paused ? $player.play() : $player.pause());
+  $.player && ($player.paused ? playerPlay() : playerPause());
 
 const trackSkip = dir => ({shiftKey, ctrlKey}) =>
   $.player && ($player.currentTime +=
