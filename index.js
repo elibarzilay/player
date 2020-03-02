@@ -148,9 +148,9 @@ const fadeTo = (tgt, cb) => {
   fadeTo.target = tgt;
   fadeTo.cb = cb;
   const fade = ()=> {
-    player.volume =
-      clip01(player.volume + (player.volume < fadeTo.target ? +0.02 : -0.02));
-    if (player.volume == fadeTo.target) {
+    $player.volume =
+      clip01($player.volume + ($player.volume < fadeTo.target ? +0.02 : -0.02));
+    if ($player.volume == fadeTo.target) {
       fadeTo.timer = null;
       if (fadeTo.cb) fadeTo.cb();
       return;
@@ -167,12 +167,13 @@ const playerStop = ()=> {
 };
 const playerPause = ()=> {
   if (!$.player) return;
-  fadeTo(0, () => player.pause());
+  fadeTo(0, () => $player.pause());
 };
 const playerPlay  = ()=> {
   if (!$.player) return play();
-  if ($player.currentTime > 0) fadeTo(1); else player.volume = 1;
-  return player.play();
+  if ($player.currentTime > 0) fadeTo($player.defaultVolume);
+  else $player.volume = $player.defaultVolume;
+  return $player.play();
 };
 const playerPlayPause = ()=>
   $.player && ($player.paused ? playerPlay() : playerPause());
@@ -217,7 +218,7 @@ const nextItem = (elt, down, opts = {}) => {
     : isHidden(elt) ? loopUp(elt)
     : isItem(elt) ? elt
     : loopDn(xChild(elt));
-  return loopUp(sub ? elt : elt.parentElement);
+  return loopUp((!sub && getInfo(elt).type == "dir") ? elt.parentElement : elt);
 };
 
 let timeRemaining = false;
@@ -364,9 +365,13 @@ bind("ArrowRight",     trackSkip(+1));
 });
 
 const percentJump = e =>
-  player.currentTime =
-    (+e.code.substring(e.code.length-1)) * player.duration / 10;
+  $player.currentTime =
+    (+e.code.substring(e.code.length-1)) * $player.duration / 10;
 bind("0123456789".split("").map(d => "Digit"+d), percentJump);
+
+$player.defaultVolume = 1; $("volume").value = 10;
+$("volume").addEventListener("input", e =>
+  fadeTo($player.defaultVolume = e.target.value / 10));
 
 // ---- time display ----------------------------------------------------------
 

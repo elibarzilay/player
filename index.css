@@ -53,8 +53,23 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
   background: #2228; border: 1px solid #3338; border-radius: 5px;
 }
 #control > div { display: inline-block; }
-#visualization { width: 16em; height: 6ex; }
+#visualization { width: calc(49vw - 17em); height: 6ex; }
 #wave { display: block; width: 10em; height: 2ex; }
+
+#volume {
+  width: 10ex;  height: 10ex; margin: 0 -4ex; transform: rotate(-90deg);
+  -webkit-appearance: none;
+  background: #0000;
+}
+#volume:focus { outline: none; }
+#volume::-webkit-slider-runnable-track {
+  background: #4448; height: 8px; border-radius: 25px;
+}
+#volume::-webkit-slider-thumb {
+  background: #822c; height: 15px; width: 15px; border-radius: 7.5px;
+  margin-top: -3.75px; -webkit-appearance: none;
+}
+#volume:focus::-webkit-slider-runnable-track { background: #444c; }
 
 #playerbuttons { text-align: center; cursor: default; }
 #playerbuttons > div {
