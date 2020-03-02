@@ -1,10 +1,7 @@
 "use strict";
 
-// !!! C-Enter: copy item to playlist (and on playlist: reveal item in list)
-//     Only for .type == "audio"
-//     Delete on playlist: remove item
+// !!! Delete on playlist: remove item
 //     C-Up, C-Down: move items up/down
-//     Next/Prev should be relative to container (playlist or $main)
 // !!! "/" implement a search filtering for the main list, using the
 //     quickfinder from pl
 
@@ -117,15 +114,15 @@ const play = (elt = $.selected) => {
 
 let unders = [...document.getElementsByClassName("under")];
 const setBackgroundImageLoop = s => {
-  if (!s) { setBackgroundImage(); s = 5000; }
+  if (!s) { setBackgroundImage(); s = 60000; } // cycle
   if (setBackgroundImageLoop.timer)
     clearTimeout(setBackgroundImageLoop.timer);
   setBackgroundImageLoop.timer = setTimeout(setBackgroundImageLoop, s);
 };
 const setBackgroundImage = (eltOrPath = $.player) => {
   if (!eltOrPath) return setBackgroundImage();
-  if (typeof eltOrPath == "string") // delay cycling for a while
-    setBackgroundImageLoop(30000);
+  if (typeof eltOrPath == "string") // explicit: delay cycling for a while
+    setBackgroundImageLoop(120000);
   else {
     const info = getInfo(eltOrPath).parent;
     if (!info.images) {
@@ -187,7 +184,7 @@ const trackSkip = dir => ({shiftKey, ctrlKey}) =>
 const playerNextPrev = down => {
   let item = $.player;
   if (!item) return;
-  do { item = nextItem(item, down); }
+  do { item = nextItem(item, down); if (!item) return; }
   while (item != $.player && getInfo(item).type != "audio");
   if (item != $.player) play(item);
 };
@@ -205,16 +202,22 @@ const isHidden = elt => elt.offsetParent === null;
 const isTop    = elt => elt == $main || elt == $plist;
 const getTop   = elt => isTop(elt) ? elt : getTop(elt.parentElement);
 
-const nextItem = (elt, down) => {
+const nextItem = (elt, down, opts = {}) => {
+  const {wrap = true, sub = true} = opts;
   const [xSibling, xChild] =
     down ? [e => e.nextElementSibling,     e => e.firstElementChild]
          : [e => e.previousElementSibling, e => e.lastElementChild];
   const loopUp = elt =>
-    !(xSibling(elt) || isTop(elt)) ? loopUp(elt.parentElement)
-    : loopDn(isTop(elt) ? elt : xSibling(elt));
+    !elt ? elt
+    : isTop(elt) ? (wrap && loopDn(elt))
+    : xSibling(elt) ? loopDn(xSibling(elt))
+    : loopUp(elt.parentElement);
   const loopDn = elt =>
-    isHidden(elt) ? loopUp(elt) : isItem(elt) ? elt : loopDn(xChild(elt));
-  return loopUp(elt);
+    !elt ? elt
+    : isHidden(elt) ? loopUp(elt)
+    : isItem(elt) ? elt
+    : loopDn(xChild(elt));
+  return loopUp(sub ? elt : elt.parentElement);
 };
 
 let timeRemaining = false;
@@ -224,8 +227,18 @@ $("times").addEventListener("click", ()=> timeRemaining = !timeRemaining);
 
 const stopEvent = e => { e.preventDefault(); e.stopImmediatePropagation(); };
 
-const selectNext = (elt = $.selected, n = 0) =>
-  n == 0 ? elt.focus() : selectNext(nextItem(elt, n>0), n>0 ? n-1 : n+1);
+const selectNext = (elt = $.selected, n = 0, opts) => {
+  if (!elt) return;
+  let result = null;
+  while (n != 0) {
+    elt = nextItem(elt, n>0, opts);
+    if (!elt) break; else result = elt;
+    if (n > 0) n--; else n++;
+  }
+  if (result) result.focus();
+};
+const selectEdge = n =>
+  selectNext(($.selected && !isMainItem($.selected)) ? $plist : $main, n);
 
 const expandDir = (elt = $.selected, info = getInfo(elt), expand = "maybe") => {
   if (expand == "maybe") expand = info.size > 30 || "deep";
@@ -266,7 +279,7 @@ const showOnly = (elt = $.selected, info = getInfo(elt)) => {
     elt = elt.parentElement;
   }
   if (toSelect) toSelect.focus();
-  else nextItem(elt0, true).focus();
+  else { const elt = elt0 && nextItem(elt0, true); if (elt) elt.focus(); }
 };
 
 const mainOrPlistOp = (ev, ...more) =>
@@ -300,11 +313,12 @@ const plistOp = (ev, elt = $.selected, info = getInfo(elt)) => {
   }
   const add = info =>
     info.type == "dir" ? info.children.forEach(add)
+    : info.type != "audio" ? undefined
     : $.altitem ? renderItem($plist, info, false)
     : $.altitem = renderItem($plist, info, false);
   add(info);
   if (ev instanceof KeyboardEvent)
-    selectNext(undefined, +1); //!!! nextdir if dir; no scrollback
+    selectNext(undefined, +1, {wrap: false, sub: false});
 };
 
 // ---- drag and drop ---------------------------------------------------------
@@ -327,11 +341,11 @@ bind("-", ()=> expandDir(undefined, undefined, false));
 bind("*", ()=> expandDir(undefined, undefined, "deep"));
 
 bind("ArrowUp",   ()=> selectNext(undefined, -1));
-bind("PageUp",    ()=> selectNext(undefined, -5));
 bind("ArrowDown", ()=> selectNext(undefined, +1));
-bind("PageDown",  ()=> selectNext(undefined, +5));
-bind("Home",      ()=> selectNext($main, +1));
-bind("End",       ()=> selectNext($main, -1));
+bind("PageUp",    ()=> selectNext(undefined, -5, {wrap: false}));
+bind("PageDown",  ()=> selectNext(undefined, +5, {wrap: false}));
+bind("Home",      ()=> selectEdge(+1));
+bind("End",       ()=> selectEdge(-1));
 
 bind([" ", "Numpad5"], ()=> playerPlayPause());
 bind("ArrowLeft",      trackSkip(-1));
