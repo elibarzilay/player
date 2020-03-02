@@ -26,7 +26,7 @@ const shuffle = xs => {
   return xs;
 };
 
-["selected", "player"].forEach(prop => {
+["selected", "player", "altitem"].forEach(prop => {
   let item; Object.defineProperty($, prop, {
     get: ()=> item,
     set: elt => { if (item) item.classList.remove(prop);
@@ -40,8 +40,8 @@ let all = {};
 const processData = data => {
   const p = dir => info => {
     const isDir = info.type == "dir";
-    info.path = info.name == "." ? "" : dir + "/" + info.name;
-    info.name = (isDir ? (info.name == "." ? "All" : info.name)
+    info.path = dir + info.name + (isDir ? "/" : "");
+    info.name = (isDir ? (info.name == "" ? "All" : info.name)
                        : info.name.replace(/[.]([^.]+)$/,
                                            info.type != "other" ? "" : " ($1)"))
                 .replace(/^(\d+)-/, "$1. ")
@@ -64,6 +64,7 @@ const $plist = $("playlist");
 const infoMap = new WeakMap();
 const getInfo = elt => infoMap.get(elt);
 const getPath = elt => elt.id || getInfo(elt).path;
+const isMainItem = elt => !!elt.id
 
 const div = (parent, css = null, txt = null) => {
   const div = document.createElement("div");
@@ -80,17 +81,22 @@ const renderItem = (elt, info, main) => {
   item.setAttribute("tabindex", 0);
   item.setAttribute("draggable", true);
   infoMap.set(item, info);
-  item.addEventListener("focus", ()=> $.selected = item);
   addItemEvents(item, info);
-  if (info.type != "dir") return;
-  const subs = div(elt, "subs");
-  info.children.forEach(c => renderItem(subs, c, main));
-  return elt;
+  if (info.type == "dir") {
+    const subs = div(elt, "subs");
+    info.children.forEach(c => renderItem(subs, c, main));
+  }
+  return item;
 };
 
 const addItemEvents = (elt, info) => {
   elt.addEventListener("click", e => mainOrPlistOp(e, elt, info));
   elt.addEventListener("dragstart", drag);
+  elt.addEventListener("focus", ()=> {
+    if ($.selected && isMainItem(elt) != isMainItem($.selected))
+      [$.altitem, $.selected] = [$.selected, $.altitem];
+    $.selected = elt;
+  });
 };
 
 // ---- player ----------------------------------------------------------------
@@ -178,10 +184,10 @@ const trackSkip = dir => ({shiftKey, ctrlKey}) =>
   $.player && ($player.currentTime +=
                  dir * skipAmounts[(shiftKey?1:0) + 2*(ctrlKey?1:0)]);
 
-const playerNextPrev = next=> {
+const playerNextPrev = down => {
   let item = $.player;
   if (!item) return;
-  do { item = nextItem(item, next); }
+  do { item = nextItem(item, down); }
   while (item != $.player && getInfo(item).type != "audio");
   if (item != $.player) play(item);
 };
@@ -197,6 +203,7 @@ $player.addEventListener("ended", ()=> playerNextPrev(true));
 const isItem   = elt => elt.classList.contains("item");
 const isHidden = elt => elt.offsetParent === null;
 const isTop    = elt => elt == $main || elt == $plist;
+const getTop   = elt => isTop(elt) ? elt : getTop(elt.parentElement);
 
 const nextItem = (elt, down) => {
   const [xSibling, xChild] =
@@ -220,7 +227,8 @@ const stopEvent = e => { e.preventDefault(); e.stopImmediatePropagation(); };
 const selectNext = (elt = $.selected, n = 0) =>
   n == 0 ? elt.focus() : selectNext(nextItem(elt, n>0), n>0 ? n-1 : n+1);
 
-const expandDir = (elt = $.selected, info = getInfo(elt), expand = null) => {
+const expandDir = (elt = $.selected, info = getInfo(elt), expand = "maybe") => {
+  if (expand == "maybe") expand = info.size > 30 || "deep";
   if (expand == "deep") {
     if (info.type != "dir") return;
     elt.parentElement.classList.add("open");
@@ -250,7 +258,7 @@ const showOnly = (elt = $.selected, info = getInfo(elt)) => {
     e.classList.remove("open");
   for (const e of $main.querySelectorAll(".only"))
     e.classList.remove("only");
-  expandDir(elt, info, info.size > 30 || "deep");
+  expandDir(elt, info);
   elt.parentElement.classList.add("open");
   while (elt != $main) {
     elt.classList.add("only");
@@ -261,10 +269,10 @@ const showOnly = (elt = $.selected, info = getInfo(elt)) => {
   else nextItem(elt0, true).focus();
 };
 
-const mainOrPlistOp = (e, ...more) =>
-  (stopEvent(e), (e.ctrlKey ? plistOp : mainOp)(...more));
+const mainOrPlistOp = (ev, ...more) =>
+  (stopEvent(ev), (ev.ctrlKey ? plistOp : mainOp)(ev, ...more));
 
-const mainOp = (elt = $.selected, info = getInfo(elt)) =>
+const mainOp = (ev, elt = $.selected, info = getInfo(elt)) =>
   info.type == "dir"   ? showOnly(elt, info) :
   info.type == "audio" ? play(elt) :
   info.type == "image" ? setBackgroundImage(info.path) :
@@ -274,29 +282,45 @@ const bindings = new Map(), bind = (keys, op) =>
   (isArray(keys) ? keys : [keys]).forEach(k => bindings.set(k, op));
 window.addEventListener("keydown", e => {
   const b = bindings.get(e.key) || bindings.get(e.code);
-  if (b) b(e);
-  else return;
+  if (!b) return;
   stopEvent(e);
+  b(e);
 });
 
 // ---- playlist --------------------------------------------------------------
 
-const plistOp = (elt = $.selected, info = getInfo(elt)) =>
-  renderItem($plist, info, false);
+const switchMain = ()=> $.altitem && $.altitem.focus();
+
+const plistOp = (ev, elt = $.selected, info = getInfo(elt)) => {
+  if (elt == $main) return;
+  if (!isMainItem(elt)) {
+    showOnly($(info.parent.path));
+    $(info.path).focus();
+    return;
+  }
+  const add = info =>
+    info.type == "dir" ? info.children.forEach(add)
+    : $.altitem ? renderItem($plist, info, false)
+    : $.altitem = renderItem($plist, info, false);
+  add(info);
+  if (ev instanceof KeyboardEvent)
+    selectNext(undefined, +1); //!!! nextdir if dir; no scrollback
+};
 
 // ---- drag and drop ---------------------------------------------------------
 
 const drag = e => e.dataTransfer.setData("text", getPath(e.target));
 
 $("control").addEventListener("dragover", stopEvent);
-$("control").addEventListener("drop", e => {
-  e.preventDefault();
-  mainOp($(e.dataTransfer.getData("text")));
+$("control").addEventListener("drop", ev => {
+  ev.preventDefault();
+  mainOp(ev, $(e.dataTransfer.getData("text")));
 });
 
 // ---- player interactions ---------------------------------------------------
 
 bind("Enter", mainOrPlistOp);
+bind("Tab", switchMain);
 
 bind("+", ()=> expandDir(undefined, undefined, true));
 bind("-", ()=> expandDir(undefined, undefined, false));
@@ -395,8 +419,9 @@ const setParent = parent => parent.children && parent.children.forEach(
 const init = data => {
   all = data;
   setParent(all);
-  renderItem($main, all, true).classList.add("open");
-  selectNext($main, 1);
+  renderItem($main, all, true);
+  $main.firstElementChild.classList.add("open");
+  selectNext($main, +1);
 };
 
 fetch("/.player/info", {method: "HEAD"})

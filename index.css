@@ -38,6 +38,7 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
 .item.other, .item.video { color: #888; }
 
 .item.selected { background: #8228; }
+.item.altitem  { background: #8222; }
 .item.player { position: relative; }
 .item.player::before {
   font-family: "MediaButtons"; content: "444"; color: #272f; z-index: -1;

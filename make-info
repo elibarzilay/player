@@ -9,8 +9,6 @@ cd "$here/.."; music="$(pwd)"
 images="$here/images" image_size="480,80"
 shopt -s nullglob
 
-full="."
-
 failwith() { printf '[%s] %s\n' "$(pwd)" "$*" 1>&2; exit 1; }
 
 # https://trac.ffmpeg.org/wiki/Waveform
@@ -105,9 +103,9 @@ file() {
 
 dir() {
   local f owd fst=1 indent="$1" dir="$2"
-  printf '{"name": "%s", "type": "dir",' "$dir"        1>&5
+  printf '{"name": "%s", "type": "dir",' "$dir" 1>&5
   printf '\n%s "children": [' "$indent" 1>&5
-  printf '\n%s  ' "$indent"             1>&5
+  printf '\n%s  ' "$indent" 1>&5
   indent+="  "
   owd="$PWD"; cd "$dir"
   pwd 1>&2
@@ -118,7 +116,7 @@ dir() {
   done
   cd "$owd"; printf ']}' 1>&5
 }
-dir "" . 5> "$here/new-info"
+dir "" "" 5> "$here/new-info"
 
 jq . < "$here/new-info" > /dev/null || failwith "produced broken json"
 
