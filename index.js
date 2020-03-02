@@ -59,9 +59,11 @@ const processData = data => {
 // ---- rendering -------------------------------------------------------------
 
 const $main = $("main");
+const $plist = $("playlist");
 
-const infoMap = new Map();
+const infoMap = new WeakMap();
 const getInfo = elt => infoMap.get(elt);
+const getPath = elt => elt.id || getInfo(elt).path;
 
 const div = (parent, css = null, txt = null) => {
   const div = document.createElement("div");
@@ -71,10 +73,10 @@ const div = (parent, css = null, txt = null) => {
   return div;
 };
 
-const renderItem = (elt, info) => {
+const renderItem = (elt, info, main) => {
   if (info.type == "dir") elt = div(elt, "list");
   const item = div(elt, ["item", info.type], info.name);
-  item.id = info.path;
+  if (main) item.id = info.path;
   item.setAttribute("tabindex", 0);
   item.setAttribute("draggable", true);
   infoMap.set(item, info);
@@ -82,12 +84,12 @@ const renderItem = (elt, info) => {
   addItemEvents(item, info);
   if (info.type != "dir") return;
   const subs = div(elt, "subs");
-  info.children.forEach(c => renderItem(subs, c));
+  info.children.forEach(c => renderItem(subs, c, main));
   return elt;
 };
 
 const addItemEvents = (elt, info) => {
-  elt.addEventListener("click", e => { mainOp(elt, info); stopEvent(e); });
+  elt.addEventListener("click", e => mainOrPlistOp(e, elt, info));
   elt.addEventListener("dragstart", drag);
 };
 
@@ -99,7 +101,7 @@ const $player = $("player");
 const play = (elt = $.selected) => {
   if (typeof elt == "string") elt = $(elt);
   if (!elt || getInfo(elt).type != "audio") return;
-  const path = elt.id;
+  const path = getPath(elt);
   $.player = elt;
   $player.src = path; playerPlay().then(startVisualizer).catch(e => {
     if (e.code != e.ABORT_ERR) throw e; });
@@ -194,14 +196,15 @@ $player.addEventListener("ended", ()=> playerNextPrev(true));
 
 const isItem   = elt => elt.classList.contains("item");
 const isHidden = elt => elt.offsetParent === null;
+const isTop    = elt => elt == $main || elt == $plist;
 
 const nextItem = (elt, down) => {
   const [xSibling, xChild] =
     down ? [e => e.nextElementSibling,     e => e.firstElementChild]
          : [e => e.previousElementSibling, e => e.lastElementChild];
   const loopUp = elt =>
-    !(xSibling(elt) || elt == $main) ? loopUp(elt.parentElement)
-    : loopDn(elt == $main ? elt : xSibling(elt));
+    !(xSibling(elt) || isTop(elt)) ? loopUp(elt.parentElement)
+    : loopDn(isTop(elt) ? elt : xSibling(elt));
   const loopDn = elt =>
     isHidden(elt) ? loopUp(elt) : isItem(elt) ? elt : loopDn(xChild(elt));
   return loopUp(elt);
@@ -258,6 +261,9 @@ const showOnly = (elt = $.selected, info = getInfo(elt)) => {
   else nextItem(elt0, true).focus();
 };
 
+const mainOrPlistOp = (e, ...more) =>
+  (stopEvent(e), (e.ctrlKey ? plistOp : mainOp)(...more));
+
 const mainOp = (elt = $.selected, info = getInfo(elt)) =>
   info.type == "dir"   ? showOnly(elt, info) :
   info.type == "audio" ? play(elt) :
@@ -273,9 +279,14 @@ window.addEventListener("keydown", e => {
   stopEvent(e);
 });
 
+// ---- playlist --------------------------------------------------------------
+
+const plistOp = (elt = $.selected, info = getInfo(elt)) =>
+  renderItem($plist, info, false);
+
 // ---- drag and drop ---------------------------------------------------------
 
-const drag = e => e.dataTransfer.setData("text", e.target.id);
+const drag = e => e.dataTransfer.setData("text", getPath(e.target));
 
 $("control").addEventListener("dragover", stopEvent);
 $("control").addEventListener("drop", e => {
@@ -285,7 +296,7 @@ $("control").addEventListener("drop", e => {
 
 // ---- player interactions ---------------------------------------------------
 
-bind("Enter", ()=> mainOp());
+bind("Enter", mainOrPlistOp);
 
 bind("+", ()=> expandDir(undefined, undefined, true));
 bind("-", ()=> expandDir(undefined, undefined, false));
@@ -384,7 +395,7 @@ const setParent = parent => parent.children && parent.children.forEach(
 const init = data => {
   all = data;
   setParent(all);
-  renderItem($main, all).classList.add("open");
+  renderItem($main, all, true).classList.add("open");
   selectNext($main, 1);
 };
 
