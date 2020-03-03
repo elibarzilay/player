@@ -57,9 +57,8 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
 #wave { display: block; width: 10em; height: 2ex; }
 
 #volume {
-  width: 10ex;  height: 10ex; margin: 0 -4ex; transform: rotate(-90deg);
-  -webkit-appearance: none;
-  background: #0000;
+  width: 10ex; height: 1ex; margin: 0 -4ex; transform: rotate(-90deg);
+  position: relative; top: -4ex; background: #0000; -webkit-appearance: none;
 }
 #volume:focus { outline: none; }
 #volume::-webkit-slider-runnable-track {

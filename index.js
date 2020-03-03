@@ -1,7 +1,5 @@
 "use strict";
 
-// !!! Delete on playlist: remove item
-//     C-Up, C-Down: move items up/down
 // !!! "/" implement a search filtering for the main list, using the
 //     quickfinder from pl
 
@@ -10,6 +8,7 @@
 const $ = x => document.getElementById(x);
 const rec = f => f((...xs) => rec(f)(...xs));
 const isArray = Array.isArray;
+const U = undefined;
 
 const clipRange = (lo, x, hi) => Math.max(Math.min(x,hi), lo);
 const clip01 = x => clipRange(0, x, 1);
@@ -26,9 +25,17 @@ const shuffle = xs => {
 ["selected", "player", "altitem"].forEach(prop => {
   let item; Object.defineProperty($, prop, {
     get: ()=> item,
-    set: elt => { if (item) item.classList.remove(prop);
-                  (item = elt).classList.add(prop); } });
+    set: elt => { if (item instanceof Element) item.classList.remove(prop);
+                  item = elt;
+                  if (item instanceof Element) item.classList.add(prop); } });
 });
+
+const blankPNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQ"
+  + "VR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+const reddishPNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQ"
+  + "VR42mP8f+ZMPQAIgQMYmyUZ4QAAAABJRU5ErkJggg==";
 
 // ---- data ------------------------------------------------------------------
 
@@ -61,7 +68,8 @@ const $plist = $("playlist");
 const infoMap = new WeakMap();
 const getInfo = elt => infoMap.get(elt);
 const getPath = elt => elt.id || getInfo(elt).path;
-const isMainItem = elt => !!elt.id
+const isMainItem = elt =>
+  elt == $main || (elt != $plist && (!!elt.id || elt == $main));
 
 const div = (parent, css = null, txt = null) => {
   const div = document.createElement("div");
@@ -103,26 +111,30 @@ const skipAmounts = [5, 2, 60, 30]; // none, shift, ctrl, shift+ctrl
 const $player = $("player");
 const play = (elt = $.selected) => {
   if (typeof elt == "string") elt = $(elt);
-  if (!elt || getInfo(elt).type != "audio") return;
-  const path = getPath(elt);
+  if (elt && getInfo(elt).type != "audio") elt = null;
   $.player = elt;
-  $player.src = path; playerPlay().then(startVisualizer).catch(e => {
+  const path = elt ? getPath(elt) : null;
+  $player.src = path || "";
+  $("wave-image").src =
+    !elt ? reddishPNG : "/images" + path.replace(/[.][^.]+$/, ".png");
+  updateTimes();
+  if (!elt) return playerStop();
+  playerPlay().then(startVisualizer).catch(e => {
     if (e.code != e.ABORT_ERR) throw e; });
-  $("wave-image").src = "/images" + path.replace(/[.][^.]+$/, ".png");
-  setBackgroundImageLoop(1000);
+  setBackgroundImageLoop(imageDelayTime);
 };
 
 let unders = [...document.getElementsByClassName("under")];
+const imageDelayTime = 1000, imageCycleTime = 60000, imageExplicitTime = 120000;
 const setBackgroundImageLoop = s => {
-  if (!s) { setBackgroundImage(); s = 60000; } // cycle
+  if (!s) { setBackgroundImage(); s = imageCycleTime; }
   if (setBackgroundImageLoop.timer)
     clearTimeout(setBackgroundImageLoop.timer);
   setBackgroundImageLoop.timer = setTimeout(setBackgroundImageLoop, s);
 };
 const setBackgroundImage = (eltOrPath = $.player) => {
-  if (!eltOrPath) return setBackgroundImage();
-  if (typeof eltOrPath == "string") // explicit: delay cycling for a while
-    setBackgroundImageLoop(120000);
+  if (!eltOrPath) return;
+  if (typeof eltOrPath == "string") setBackgroundImageLoop(imageExplicitTime);
   else {
     const info = getInfo(eltOrPath).parent;
     if (!info.images) {
@@ -130,7 +142,7 @@ const setBackgroundImage = (eltOrPath = $.player) => {
         info.children.filter(n => n.type == "image").map(n => n.path);
       info.curImages = [];
     };
-    if (!info.images.length) return;
+    if (!info.images.length) eltOrPath = null;
     if (info.images.length == 1) eltOrPath = info.images[0];
     else {
       if (!info.curImages.length) info.curImages = shuffle(info.images);
@@ -140,7 +152,7 @@ const setBackgroundImage = (eltOrPath = $.player) => {
   if (unders[0].src == new URL(eltOrPath, document.baseURI).href) return;
   unders[0].style.opacity = "";
   [unders[1], unders[0]] = [...unders];
-  unders[0].src = eltOrPath;
+  unders[0].src = eltOrPath || blankPNG;
   unders[0].style.opacity = 1.0;
 };
 
@@ -148,9 +160,9 @@ const fadeTo = (tgt, cb) => {
   fadeTo.target = tgt;
   fadeTo.cb = cb;
   const fade = ()=> {
-    $player.volume =
-      clip01($player.volume + ($player.volume < fadeTo.target ? +0.02 : -0.02));
-    if ($player.volume == fadeTo.target) {
+    $player.volume = $player.paused ? fadeTo.target
+      : clip01($player.volume + ($player.volume<fadeTo.target ? +0.02 : -0.02));
+    if (Math.abs($player.volume - fadeTo.target) < 0.018) {
       fadeTo.timer = null;
       if (fadeTo.cb) fadeTo.cb();
       return;
@@ -185,8 +197,8 @@ const trackSkip = dir => ({shiftKey, ctrlKey}) =>
 const playerNextPrev = down => {
   let item = $.player;
   if (!item) return;
-  do { item = nextItem(item, down); if (!item) return; }
-  while (item != $.player && getInfo(item).type != "audio");
+  do { item = nextItem(item, down); }
+  while (item && item != $.player && getInfo(item).type != "audio");
   if (item != $.player) play(item);
 };
 
@@ -204,7 +216,7 @@ const isTop    = elt => elt == $main || elt == $plist;
 const getTop   = elt => isTop(elt) ? elt : getTop(elt.parentElement);
 
 const nextItem = (elt, down, opts = {}) => {
-  const {wrap = true, sub = true} = opts;
+  const {wrap = true, sub = true, different = false} = opts;
   const [xSibling, xChild] =
     down ? [e => e.nextElementSibling,     e => e.firstElementChild]
          : [e => e.previousElementSibling, e => e.lastElementChild];
@@ -218,7 +230,9 @@ const nextItem = (elt, down, opts = {}) => {
     : isHidden(elt) ? loopUp(elt)
     : isItem(elt) ? elt
     : loopDn(xChild(elt));
-  return loopUp((!sub && getInfo(elt).type == "dir") ? elt.parentElement : elt);
+  const start  = (!sub && getInfo(elt).type == "dir") ? elt.parentElement : elt;
+  const result = loopUp(start);
+  return (!different || result != start) ? result : null;
 };
 
 let timeRemaining = false;
@@ -229,17 +243,25 @@ $("times").addEventListener("click", ()=> timeRemaining = !timeRemaining);
 const stopEvent = e => { e.preventDefault(); e.stopImmediatePropagation(); };
 
 const selectNext = (elt = $.selected, n = 0, opts) => {
+  // debugger;
+  const move = opts && opts.move && (n>0 ? "down" : "up");
   if (!elt) return;
+  if (move && isMainItem(elt)) return;
   let result = null;
   while (n != 0) {
     elt = nextItem(elt, n>0, opts);
     if (!elt) break; else result = elt;
     if (n > 0) n--; else n++;
   }
-  if (result) result.focus();
+  if (!result) return;
+  if (!move) return result.focus();
+  const swap = result == result.parentElement.firstElementChild ? result
+             : result == result.parentElement.lastElementChild  ? null
+             : move == "up" ? result : result.nextElementSibling;
+  result.parentElement.insertBefore($.selected, swap);
 };
-const selectEdge = n =>
-  selectNext(($.selected && !isMainItem($.selected)) ? $plist : $main, n);
+const selectEdge = (n, opts) =>
+  selectNext(($.selected && !isMainItem($.selected)) ? $plist : $main, n, opts);
 
 const expandDir = (elt = $.selected, info = getInfo(elt), expand = "maybe") => {
   if (expand == "maybe") expand = info.size > 30 || "deep";
@@ -283,8 +305,8 @@ const showOnly = (elt = $.selected, info = getInfo(elt)) => {
   else { const elt = elt0 && nextItem(elt0, true); if (elt) elt.focus(); }
 };
 
-const mainOrPlistOp = (ev, ...more) =>
-  (stopEvent(ev), (ev.ctrlKey ? plistOp : mainOp)(ev, ...more));
+const mainOrPlistOp = (e, ...more) =>
+  (stopEvent(e), (e.ctrlKey ? plistOp : mainOp)(e, ...more));
 
 const mainOp = (ev, elt = $.selected, info = getInfo(elt)) =>
   info.type == "dir"   ? showOnly(elt, info) :
@@ -292,14 +314,15 @@ const mainOp = (ev, elt = $.selected, info = getInfo(elt)) =>
   info.type == "image" ? setBackgroundImage(info.path) :
   window.open(info.path, "_blank");
 
-const bindings = new Map(), bind = (keys, op) =>
-  (isArray(keys) ? keys : [keys]).forEach(k => bindings.set(k, op));
+const bindings = new Map(), bind = (keys, op, filter) =>
+  (isArray(keys) ? keys : [keys]).forEach(k => bindings.set(k, [op, filter]));
 window.addEventListener("keydown", e => {
   const b = bindings.get(e.key) || bindings.get(e.code);
-  if (!b) return;
+  if (!b || (b[1] && !b[1](e))) return;
   stopEvent(e);
-  b(e);
+  b[0](e);
 });
+const notCtrl = e => !e.ctrlKey;
 
 // ---- playlist --------------------------------------------------------------
 
@@ -314,12 +337,35 @@ const plistOp = (ev, elt = $.selected, info = getInfo(elt)) => {
   }
   const add = info =>
     info.type == "dir" ? info.children.forEach(add)
-    : info.type != "audio" ? undefined
+    : info.type != "audio" ? U
     : $.altitem ? renderItem($plist, info, false)
-    : $.altitem = renderItem($plist, info, false);
+    : play($.altitem = renderItem($plist, info, false));
   add(info);
   if (ev instanceof KeyboardEvent)
-    selectNext(undefined, +1, {wrap: false, sub: false});
+    selectNext(U, +1, {wrap: false, sub: false});
+};
+
+const plistDelete = back => {
+  const item = $.selected;
+  if (!item || isMainItem(item)) return;
+  const toDelete = back ? item.previousElementSibling : item;
+  if (!toDelete) return;
+  const newSel = back ? item
+    : item.nextElementSibling || item.previousElementSibling || $.altitem;
+  const [prev, next] = [false, true].map(d =>
+    nextItem(toDelete, d, {different: true}));
+  if (toDelete == $.player) {
+    $.player = {previousElementSibling: prev, nextElementSibling: next};
+    infoMap.set($.player, getInfo(toDelete));
+  } else if ($.player && !($.player instanceof Element)) {
+    if ($.player.nextElementSibling == toDelete)
+      $.player.nextElementSibling = next;
+    if ($.player.previousElementSibling == toDelete)
+      $.player.previousElementSibling = prev;
+  }
+  toDelete.remove();
+  newSel.focus();
+  if (isMainItem(newSel)) $.altitem = null;
 };
 
 // ---- drag and drop ---------------------------------------------------------
@@ -337,16 +383,18 @@ $("control").addEventListener("drop", ev => {
 bind("Enter", mainOrPlistOp);
 bind("Tab", switchMain);
 
-bind("+", ()=> expandDir(undefined, undefined, true));
-bind("-", ()=> expandDir(undefined, undefined, false));
-bind("*", ()=> expandDir(undefined, undefined, "deep"));
+bind(["Backspace", "Delete"], e => plistDelete(e.key == "Backspace"));
 
-bind("ArrowUp",   ()=> selectNext(undefined, -1));
-bind("ArrowDown", ()=> selectNext(undefined, +1));
-bind("PageUp",    ()=> selectNext(undefined, -5, {wrap: false}));
-bind("PageDown",  ()=> selectNext(undefined, +5, {wrap: false}));
-bind("Home",      ()=> selectEdge(+1));
-bind("End",       ()=> selectEdge(-1));
+bind("+", ()=> expandDir(U, U, true),   notCtrl);
+bind("-", ()=> expandDir(U, U, false),  notCtrl);
+bind("*", ()=> expandDir(U, U, "deep"), notCtrl);
+
+bind("ArrowUp",   e => selectNext(U, -1, {move: e.ctrlKey}));
+bind("ArrowDown", e => selectNext(U, +1, {move: e.ctrlKey}));
+bind("PageUp",    e => selectNext(U, -5, {wrap: false, move: e.ctrlKey}));
+bind("PageDown",  e => selectNext(U, +5, {wrap: false, move: e.ctrlKey}));
+bind("Home",      e => selectEdge(+1, {move: e.ctrlKey}));
+bind("End",       e => selectEdge(-1, {move: e.ctrlKey}));
 
 bind([" ", "Numpad5"], ()=> playerPlayPause());
 bind("ArrowLeft",      trackSkip(-1));
@@ -370,8 +418,14 @@ const percentJump = e =>
 bind("0123456789".split("").map(d => "Digit"+d), percentJump);
 
 $player.defaultVolume = 1; $("volume").value = 10;
-$("volume").addEventListener("input", e =>
-  fadeTo($player.defaultVolume = e.target.value / 10));
+const $volume = $("volume");
+const updateVolume = v => {
+  fadeTo($player.defaultVolume = clip01(v));
+  $volume.value = Math.round(10 * $player.defaultVolume);
+};
+$volume.addEventListener("input", ()=> updateVolume((+$volume.value) / 10));
+bind("Numpad8", ()=> updateVolume((+$volume.value + 1) / 10));
+bind("Numpad2", ()=> updateVolume((+$volume.value - 1) / 10));
 
 // ---- time display ----------------------------------------------------------
 
@@ -385,6 +439,7 @@ const updateTimes = ()=> {
   if (!Number.isFinite($player.duration) || !$.player) {
     if (shownTime) { shownTime = null; }
     if (shownURL)  { shownTime = null; }
+    $dur.innerText = $time.innerText = "–:––";
     return;
   }
   if (shownURL != $player.src && $player.duration) {
@@ -441,6 +496,8 @@ const init = data => {
   renderItem($main, all, true);
   $main.firstElementChild.classList.add("open");
   selectNext($main, +1);
+  $("wave-image").src = reddishPNG;
+  updateTimes();
 };
 
 fetch("/.player/info", {method: "HEAD"})
