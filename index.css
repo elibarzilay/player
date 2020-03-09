@@ -6,9 +6,10 @@ body {
 code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
 
 .itemlist {
-  --height: calc(98vh - 2 * var(--page-margin));
+  --height: calc(99vh - 2 * var(--page-margin));
   width: 49%; height: var(--height);
   background: #4044; overflow: hidden scroll;
+  padding: 0.5ex 0;
 }
 #main     { float: left; }
 #playlist { float: right;
@@ -57,15 +58,15 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
 #wave { display: block; width: 10em; height: 2ex; }
 
 #volume {
-  width: 10ex; height: 1ex; margin: 0 -4ex; transform: rotate(-90deg);
-  position: relative; top: -4ex; background: #0000; -webkit-appearance: none;
+  width: 8ex; height: 1ex; margin: 0 -3ex; transform: rotate(-90deg);
+  position: relative; top: -2.8ex; background: #0000; -webkit-appearance: none;
 }
 #volume:focus { outline: none; }
 #volume::-webkit-slider-runnable-track {
-  background: #4448; height: 8px; border-radius: 25px;
+  background: #4448; height: 4px; border-radius: 25px;
 }
 #volume::-webkit-slider-thumb {
-  background: #822c; height: 15px; width: 15px; border-radius: 7.5px;
+  background: #822c; height: 12px; width: 12px; border-radius: 6px;
   margin-top: -3.75px; -webkit-appearance: none;
 }
 #volume:focus::-webkit-slider-runnable-track { background: #444c; }
