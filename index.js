@@ -117,7 +117,7 @@ const play = (elt = $.selected) => {
   $player.src = path || "";
   $("wave-image").src =
     !elt ? reddishPNG : "/images" + path.replace(/[.][^.]+$/, ".png");
-  updateTimes();
+  updateDisplays();
   if (!elt) return playerStop();
   playerPlay().then(startVisualizer).catch(e => {
     if (e.code != e.ABORT_ERR) throw e; });
@@ -455,6 +455,59 @@ const updateTimes = ()=> {
   }
 };
 
+// ---- info display ----------------------------------------------------------
+
+const infoDisplay = (()=> {
+  const infoDiv = $("track-info"), textDiv = infoDiv.firstElementChild;
+  const START = 0, END = 1, CLEARSTART = 2, CLEAREND = 3, NEWTEXT = 4;
+  let initialized = false, state = START, newText = "", moveTo = 0;
+  //
+  const move = (x, st, {time = 60, text = undefined, fun = "ease-in-out"}) => {
+    if (text !== undefined) {
+      textDiv.innerText = text;
+      moveTo = infoDiv.offsetWidth - textDiv.scrollWidth;
+    }
+    if (textDiv.innerText == "" && state == NEWTEXT) return;
+    textDiv.style.transition = `left ${time}s ${fun}`;
+    textDiv.style.left = `${x}px`;
+    state = st;
+    if (time <= 0) setTimeout(done, 100);
+  };
+  //
+  const transition = [];
+  transition[START]   = ()=> move(0, END, {});
+  transition[END]     = ()=> move(moveTo, START, {});
+  transition[NEWTEXT] = ()=> move(0, END, {time: 1, fun: "ease-out"});
+  transition[CLEARSTART] =
+    ()=> move(-(textDiv.scrollWidth+1), CLEAREND, {time: 1, fun: "ease-in"});
+  transition[CLEAREND] =
+    ()=> move(infoDiv.offsetWidth, NEWTEXT, {time: 0, text: newText});
+  const done = ()=> transition[state]();
+  //
+  if (!initialized) {
+    initialized = true;
+    textDiv.addEventListener("transitionend", done);
+  }
+  //
+  return str => { state = CLEARSTART; newText = str; done(); };
+})();
+
+const updateTrackInfo = ()=> {
+  const info = $.player && getInfo($.player), sep = " • ";
+  let text = "";
+  if (info) {
+    text += info.title || info.name;
+    text += sep;
+    text += info.album || info.parent.name;
+    if (info.track) text += ` (#${info.track})`;
+    if (info.date)  text += `, ${info.date}`;
+    text += sep;
+    text += info.artist || (info.parent.parent && info.parent.parent.name)
+            || "???";
+  }
+  infoDisplay(text);
+};
+
 // ---- waveform control ------------------------------------------------------
 
 const wCanvas = $("wave-canvas"), ctx = wCanvas.getContext("2d");
@@ -490,6 +543,8 @@ $wave.addEventListener("mousedown", e => {
 const setParent = parent => parent.children && parent.children.forEach(
   child => { child.parent = parent; setParent(child); });
 
+const updateDisplays = ()=> (updateTimes(), updateTrackInfo());
+
 const init = data => {
   all = data;
   setParent(all);
@@ -497,7 +552,7 @@ const init = data => {
   $main.firstElementChild.classList.add("open");
   selectNext($main, +1);
   $("wave-image").src = reddishPNG;
-  updateTimes();
+  updateDisplays();
 };
 
 fetch("/.player/info", {method: "HEAD"})
