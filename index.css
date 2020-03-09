@@ -1,6 +1,9 @@
+:root {
+  --page-margin: 2ex;
+  --volume: #272f;
+}
 body {
   background: #101; color: #fff; font-family: Arial, sans-serif;
-  --page-margin: 2ex;
   margin: var(--page-margin);
 }
 code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
@@ -11,6 +14,7 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
   background: #4044; overflow: hidden scroll;
   padding: 0.5ex 0;
 }
+.itemlist.volumebg { background: var(--volume); }
 #main     { float: left; }
 #playlist { float: right;
   margin-top: 10ex; height: calc(var(--height) - 10ex);
@@ -42,15 +46,15 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
 .item.altitem  { background: #8222; }
 .item.player { position: relative; }
 .item.player::before {
-  font-family: "MediaButtons"; content: "444"; color: #272f; z-index: -1;
-  position: absolute; right: 0; width: 100%; padding: 0 0.25ex;
+  font-family: "MediaButtons"; content: "444444"; color: var(--volume);
+  z-index: -1; position: absolute; right: 0; width: 100%; padding: 0 0.25ex;
   transform: scale(-3, 2); transform-origin: 25% 50%;
 }
 
 #control {
   position: fixed; white-space: nowrap; user-select: none;
   right: var(--page-margin); top: var(--page-margin);
-  width: calc(49vw - 3em); padding: 0.5ex 1em; text-align: right;
+  width: calc(49vw - 3em); padding: 0.5ex 1em;
   background: #2228; border: 1px solid #3338; border-radius: 5px;
 }
 #control > div { display: inline-block; }

@@ -524,7 +524,13 @@ const startVisualizer = ()=> {
   analyser.getByteTimeDomainData(aData);
   const vCanvas = document.getElementById("visualization");
   let mode = 3;
+  const rootS = document.documentElement.style;
   vCanvas.addEventListener("click", ()=> mode = (mode+1) % 4);
+  vCanvas.addEventListener("contextmenu", e => {
+    $main.classList.toggle("volumebg");
+    $plist.classList.toggle("volumebg");
+    stopEvent(e);
+  });
   const cCtx = vCanvas.getContext("2d");
   const draw = ()=> {
     requestAnimationFrame(draw);
@@ -532,25 +538,33 @@ const startVisualizer = ()=> {
     cCtx.clearRect(0, 0, vCanvas.width, vCanvas.height);
     if (!mode) return;
     const sliceWidth = vCanvas.width / bufLen;
+    let avg1 = 0, avg2 = 0;
     if (mode & 1) {
       analyser.getByteFrequencyData(aData);
       cCtx.fillStyle = "#844";
       for (let i = 0, x = 0; i < bufLen; i++, x += sliceWidth) {
+        avg1 += aData[i];
         const barHeight = aData[i]/2 + 1;
         cCtx.fillRect(x, vCanvas.height/2 - barHeight/2, sliceWidth+1, barHeight);
       }
-    }
+      avg1 = clip01(avg1 / bufLen / 128);
+    } else avg1 = 0.5;
     if (mode & 2) {
       analyser.getByteTimeDomainData(aData);
       cCtx.lineWidth = 2; cCtx.strokeStyle = "#fffc";
       cCtx.beginPath();
       for (let i = 0, x = 0; i < bufLen; i++, x += sliceWidth) {
+        avg2 += Math.abs(128 - aData[i]);
         const y = aData[i] * vCanvas.height / 256;
         if (i == 0) cCtx.moveTo(x, y); else cCtx.lineTo(x, y);
       }
       cCtx.lineTo(vCanvas.width, vCanvas.height / 2);
       cCtx.stroke();
-    }
+      avg2 = clip01(avg2 / bufLen / 64);
+    } else avg2 = 0.5;
+    rootS.setProperty(
+      "--volume",
+      `hsl(${Math.round(120*avg2)}deg, 100%, 50%, ${Math.round(100*avg1)}%)`);
   }
   draw();
 };
