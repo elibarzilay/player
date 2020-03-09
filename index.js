@@ -1,7 +1,21 @@
 "use strict";
 
+// !!! Adding an item to plist => don't play if something is already playing
+//     Add it as the currently playing item if we're adding the playing item
+// !!! implement a quick-find thing (over just the current displayed list)
 // !!! "/" implement a search filtering for the main list, using the
 //     quickfinder from pl
+
+// ---- config ----------------------------------------------------------------
+
+const autoExpandItems = 30;
+const pgSize = 10;
+const bigSkip = 60, smallSkip = 5, smallerSkipDiv = 2;
+const imageDelayTime = 2, imageCycleTime = 60, imageExplicitTime = 120;
+const tickerTime = 60, tickerSwapTime = 1;
+const waveNeedleColor = "#f00a", waveNeedleWidth = 4;
+const analyzerSmoothing = 0.5, analyzerBins = 1024;
+const analyzerWaveColor = "#ffcc", analyzerBinsColor = "#844";
 
 // ---- utils -----------------------------------------------------------------
 
@@ -52,7 +66,8 @@ const processData = data => {
                 .replace(/_/g, " ").replace(/-/g, " – ");
     if (isDir) {
       info.children.forEach(p(info.path));
-      info.size = info.children.map(c => c.size || 1).reduce((x,y) => x+y, 0) + 1;
+      info.size = 1 + info.children.map(c => c.size || 1)
+                                   .reduce((x,y) => x+y, 0);
     }
   };
   p("")(data);
@@ -106,8 +121,6 @@ const addItemEvents = (elt, info) => {
 
 // ---- player ----------------------------------------------------------------
 
-const skipAmounts = [5, 2, 60, 30]; // none, shift, ctrl, shift+ctrl
-
 const $player = $("player");
 const play = (elt = $.selected) => {
   if (typeof elt == "string") elt = $(elt);
@@ -125,12 +138,11 @@ const play = (elt = $.selected) => {
 };
 
 let unders = [...document.getElementsByClassName("under")];
-const imageDelayTime = 1000, imageCycleTime = 60000, imageExplicitTime = 120000;
 const setBackgroundImageLoop = s => {
   if (!s) { setBackgroundImage(); s = imageCycleTime; }
   if (setBackgroundImageLoop.timer)
     clearTimeout(setBackgroundImageLoop.timer);
-  setBackgroundImageLoop.timer = setTimeout(setBackgroundImageLoop, s);
+  setBackgroundImageLoop.timer = setTimeout(setBackgroundImageLoop, 1000*s);
 };
 const setBackgroundImage = (eltOrPath = $.player) => {
   if (!eltOrPath) return;
@@ -192,7 +204,8 @@ const playerPlayPause = ()=>
 
 const trackSkip = dir => ({shiftKey, ctrlKey}) =>
   $.player && ($player.currentTime +=
-                 dir * skipAmounts[(shiftKey?1:0) + 2*(ctrlKey?1:0)]);
+                 dir * (ctrlKey ? bigSkip : smallSkip)
+                     / (shiftKey ? smallerSkipDiv : 1));
 
 const playerNextPrev = down => {
   let item = $.player;
@@ -264,7 +277,7 @@ const selectEdge = (n, opts) =>
   selectNext(($.selected && !isMainItem($.selected)) ? $plist : $main, n, opts);
 
 const expandDir = (elt = $.selected, info = getInfo(elt), expand = "maybe") => {
-  if (expand == "maybe") expand = info.size > 30 || "deep";
+  if (expand == "maybe") expand = info.size > autoExpandItems || "deep";
   if (expand == "deep") {
     if (info.type != "dir") return;
     elt.parentElement.classList.add("open");
@@ -391,8 +404,8 @@ bind("*", ()=> expandDir(U, U, "deep"), notCtrl);
 
 bind("ArrowUp",   e => selectNext(U, -1, {move: e.ctrlKey}));
 bind("ArrowDown", e => selectNext(U, +1, {move: e.ctrlKey}));
-bind("PageUp",    e => selectNext(U, -5, {wrap: false, move: e.ctrlKey}));
-bind("PageDown",  e => selectNext(U, +5, {wrap: false, move: e.ctrlKey}));
+bind("PageUp",    e => selectNext(U, -pgSize, {wrap: false, move: e.ctrlKey}));
+bind("PageDown",  e => selectNext(U, +pgSize, {wrap: false, move: e.ctrlKey}));
 bind("Home",      e => selectEdge(+1, {move: e.ctrlKey}));
 bind("End",       e => selectEdge(-1, {move: e.ctrlKey}));
 
@@ -462,7 +475,8 @@ const infoDisplay = (()=> {
   const START = 0, END = 1, CLEARSTART = 2, CLEAREND = 3, NEWTEXT = 4;
   let initialized = false, state = START, newText = "", moveTo = 0;
   //
-  const move = (x, st, {time = 60, text = undefined, fun = "ease-in-out"}) => {
+  const move = (x, st, {time = tickerTime, text = undefined,
+                        fun = "ease-in-out"} = {}) => {
     if (text !== undefined) {
       textDiv.innerText = text;
       moveTo = infoDiv.offsetWidth - textDiv.scrollWidth;
@@ -475,13 +489,14 @@ const infoDisplay = (()=> {
   };
   //
   const transition = [];
-  transition[START]   = ()=> move(0, END, {});
-  transition[END]     = ()=> move(moveTo, START, {});
-  transition[NEWTEXT] = ()=> move(0, END, {time: 1, fun: "ease-out"});
-  transition[CLEARSTART] =
-    ()=> move(-(textDiv.scrollWidth+1), CLEAREND, {time: 1, fun: "ease-in"});
-  transition[CLEAREND] =
-    ()=> move(infoDiv.offsetWidth, NEWTEXT, {time: 0, text: newText});
+  transition[START]      = ()=> move(0, END);
+  transition[END]        = ()=> move(moveTo, START);
+  transition[NEWTEXT]    = ()=> move(0, END,
+                                     {time: tickerSwapTime, fun: "ease-out"});
+  transition[CLEARSTART] = ()=> move(-(textDiv.scrollWidth+1), CLEAREND,
+                                     {time: tickerSwapTime, fun: "ease-in"});
+  transition[CLEAREND]   = ()=> move(infoDiv.offsetWidth, NEWTEXT,
+                                     {time: 0, text: newText});
   const done = ()=> transition[state]();
   //
   if (!initialized) {
@@ -510,13 +525,16 @@ const updateTrackInfo = ()=> {
 
 // ---- waveform control ------------------------------------------------------
 
-const wCanvas = $("wave-canvas"), ctx = wCanvas.getContext("2d");
-const drawPlayerLine = ()=> {
-  ctx.clearRect(0, 0, wCanvas.width, wCanvas.height);
-  ctx.fillStyle = "#f00";
-  ctx.fillRect(($player.currentTime/$player.duration)*wCanvas.width - 1,
-               0, 2, wCanvas.height);
-};
+const drawPlayerLine = (()=> {
+  const canvas = $("wave-canvas"), ctx = canvas.getContext("2d");
+  return ()=> {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = waveNeedleColor;
+    const loc = $player.currentTime / $player.duration;
+    ctx.fillRect(loc * canvas.width - waveNeedleWidth/2, 0,
+                 waveNeedleWidth, canvas.height);
+  };
+})();
 $player.addEventListener("timeupdate", drawPlayerLine);
 
 const $wave = $("wave");
@@ -571,12 +589,13 @@ const startVisualizer = ()=> {
   if (startVisualizer.aCtx) return;
   const aCtx = startVisualizer.aCtx = new AudioContext();
   const playerAudio = aCtx.createMediaElementSource($player);
-  const analyser = aCtx.createAnalyser();
-  analyser.smoothingTimeConstant = 0.5; analyser.fftSize = 2048;
-  playerAudio.connect(analyser);
+  const analyzer = aCtx.createAnalyser();
+  analyzer.smoothingTimeConstant = analyzerSmoothing;
+  analyzer.fftSize = 2 * analyzerBins;
+  playerAudio.connect(analyzer);
   playerAudio.connect(aCtx.destination);
-  const bufLen = analyser.frequencyBinCount, aData = new Uint8Array(bufLen);
-  analyser.getByteTimeDomainData(aData);
+  const bufLen = analyzer.frequencyBinCount, aData = new Uint8Array(bufLen);
+  analyzer.getByteTimeDomainData(aData);
   const vCanvas = document.getElementById("visualization");
   let mode = 3;
   const rootS = document.documentElement.style;
@@ -595,18 +614,19 @@ const startVisualizer = ()=> {
     const sliceWidth = vCanvas.width / bufLen;
     let avg1 = 0, avg2 = 0;
     if (mode & 1) {
-      analyser.getByteFrequencyData(aData);
-      cCtx.fillStyle = "#844";
+      analyzer.getByteFrequencyData(aData);
+      cCtx.fillStyle = analyzerBinsColor;
       for (let i = 0, x = 0; i < bufLen; i++, x += sliceWidth) {
         avg1 += aData[i];
         const barHeight = aData[i]/2 + 1;
-        cCtx.fillRect(x, vCanvas.height/2 - barHeight/2, sliceWidth+1, barHeight);
+        cCtx.fillRect(x, vCanvas.height/2 - barHeight/2,
+                      sliceWidth+1, barHeight);
       }
       avg1 = clip01(avg1 / bufLen / 128);
     } else avg1 = 0.5;
     if (mode & 2) {
-      analyser.getByteTimeDomainData(aData);
-      cCtx.lineWidth = 2; cCtx.strokeStyle = "#fffc";
+      analyzer.getByteTimeDomainData(aData);
+      cCtx.lineWidth = 2; cCtx.strokeStyle = analyzerWaveColor;
       cCtx.beginPath();
       for (let i = 0, x = 0; i < bufLen; i++, x += sliceWidth) {
         avg2 += Math.abs(128 - aData[i]);
