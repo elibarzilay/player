@@ -11,6 +11,7 @@
 const autoExpandItems = 30;
 const pgSize = 10;
 const bigSkip = 60, smallSkip = 5, smallerSkipDiv = 2;
+const fadeToFreq = 20, fadeToTime = 0.5; // (for a full 0..1 fade)
 const imageDelayTime = 2, imageCycleTime = 60, imageExplicitTime = 120;
 const tickerTime = 60, tickerSwapTime = 1;
 const waveNeedleColor = "#f00a", waveNeedleWidth = 4;
@@ -169,38 +170,44 @@ const setBackgroundImage = (eltOrPath = $.player) => {
 };
 
 const fadeTo = (tgt, cb) => {
-  fadeTo.target = tgt;
-  fadeTo.cb = cb;
   const fade = ()=> {
-    $player.volume = $player.paused ? fadeTo.target
-      : clip01($player.volume + ($player.volume<fadeTo.target ? +0.02 : -0.02));
-    if (Math.abs($player.volume - fadeTo.target) < 0.018) {
+    const now = Date.now();
+    if ($player.paused || now >= end) {
+      $player.volume = tgt;
       fadeTo.timer = null;
-      if (fadeTo.cb) fadeTo.cb();
+      if (cb) cb();
       return;
     }
-    fadeTo.timer = setTimeout(fade, 10);
+    $player.volume = tgt + dir * (end - now) / (1000 * fadeToTime);
+    fadeTo.timer = setTimeout(fade, 1000/fadeToFreq);
   };
-  if (!fadeTo.timer) fadeTo.timer = setTimeout(fade, 0);
+  if (fadeTo.timer) clearTimeout(fadeTo.timer);
+  fadeTo.timer = setTimeout(fade, 1000/fadeToFreq);
+  const from = $player.volume, dir = from > tgt ? +1 : -1;
+  const end  = Date.now() + 1000 * fadeToTime * Math.abs(tgt - from);
 };
 
+let nowPausing = false;
 const playerStop = ()=> {
+  nowPausing = false;
   if (!$.player) return;
   if (!$player.paused) $player.pause();
   $player.currentTime = 0;
 };
 const playerPause = ()=> {
+  nowPausing = true;
   if (!$.player) return;
-  fadeTo(0, () => $player.pause());
+  fadeTo(0, ()=> { nowPausing = false; $player.pause(); });
 };
 const playerPlay  = ()=> {
+  nowPausing = false;
   if (!$.player) return play();
   if ($player.currentTime > 0) fadeTo($player.defaultVolume);
   else $player.volume = $player.defaultVolume;
   return $player.play();
 };
 const playerPlayPause = ()=>
-  $.player && ($player.paused ? playerPlay() : playerPause());
+  $.player && ($player.paused || nowPausing ? playerPlay() : playerPause());
 
 const trackSkip = dir => ({shiftKey, ctrlKey}) =>
   $.player && ($player.currentTime +=
