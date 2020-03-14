@@ -14,6 +14,7 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
   background: #4044; overflow: hidden scroll;
   padding: 0.5ex 0;
 }
+.itemlist.drag-to { background: #8084; }
 .itemlist.volumebg { background: var(--volume); }
 #main     { float: left; }
 #playlist { float: right;
@@ -46,9 +47,16 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
 .item.player { position: relative; }
 .item.player::after {
   font-family: "MediaButtons"; content: "444444"; color: var(--volume);
-  z-index: 2; position: absolute; right: 0; width: 100%; padding: 0 0.25ex;
+  z-index: 2; position: absolute; right: 0; width: 50%; padding: 0 0.25ex;
   transform: scale(-3, 2); transform-origin: 25% 50%;
 }
+
+.drag-to .item.dragitem { position: relative; }
+.drag-to .item.dragitem::before {
+  content: ""; position: absolute; left: 0; right: 0; top: -2px; height: 4px;
+  background: #822; z-index: 1;
+}
+.drag-to .item.dragitem.bottom::before { top: auto; bottom: -2px; }
 
 #control {
   position: fixed; white-space: nowrap; user-select: none;
@@ -56,6 +64,7 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
   width: calc(49vw - 3em); padding: 0.5ex 1em;
   background: #2228; border: 1px solid #3338; border-radius: 5px;
 }
+#control.drag-to { background: #4448; }
 #control > div { display: inline-block; }
 #visualization { width: calc(49vw - 17em); height: 6ex; }
 #wave { display: block; width: 10em; height: 2ex; }

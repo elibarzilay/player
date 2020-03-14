@@ -36,10 +36,11 @@ const shuffle = xs => {
   return xs;
 };
 
-["selected", "player", "altitem"].forEach(prop => {
+["selected", "player", "altitem", "dragitem"].forEach(prop => {
   let item; Object.defineProperty($, prop, {
     get: ()=> item,
-    set: elt => { if (item instanceof Element) item.classList.remove(prop);
+    set: elt => { if (item == elt) return;
+                  if (item instanceof Element) item.classList.remove(prop);
                   item = elt;
                   if (item instanceof Element) item.classList.add(prop); } });
 });
@@ -111,7 +112,8 @@ const renderItem = (elt, info, main) => {
 
 const addItemEvents = (elt, info) => {
   elt.addEventListener("click", e => mainOrPlistOp(e, elt, info));
-  elt.addEventListener("dragstart", drag);
+  elt.addEventListener("dragstart", dragStart);
+  elt.addEventListener("dragend", dragEnd);
   elt.addEventListener("focus", ()=> {
     if ($.selected && isMainItem(elt) != isMainItem($.selected))
       [$.altitem, $.selected] = [$.selected, $.altitem];
@@ -353,20 +355,28 @@ const notCtrl = e => !e.ctrlKey;
 
 const switchMain = ()=> $.altitem && $.altitem.focus();
 
-const plistOp = (ev, elt = $.selected, info = getInfo(elt)) => {
+const plistOp = (e, elt = $.selected, info = getInfo(elt), dragTo) => {
   if (elt == $main) return;
+  const drag = e instanceof DragEvent && $drag;
+  if (drag && !isMainItem(elt))
+    return $plist.insertBefore($drag, dragTo);
   if (!isMainItem(elt)) {
     showOnly($(info.parent.path));
     $(info.path).focus();
     return;
   }
+  const render = dragTo
+    ? info => $plist.insertBefore(renderItem($plist, info, false), dragTo)
+    : info => renderItem($plist, info, false);
   const add = info =>
-    info.type == "dir" ? info.children.forEach(add)
+    info.type == "dir"     ? info.children.forEach(add)
     : info.type != "audio" ? U
-    : $.altitem ? renderItem($plist, info, false)
-    : play($.altitem = renderItem($plist, info, false));
+    : $.player == elt      ? $.player = $.altitem = render(info)
+    : $.altitem            ? render(info)
+    : $.player             ? $.altitem = render(info)
+    :                        play($.altitem = render(info));
   add(info);
-  if (ev instanceof KeyboardEvent)
+  if (e instanceof KeyboardEvent)
     selectNext(U, +1, {wrap: false, sub: false});
 };
 
@@ -395,13 +405,53 @@ const plistDelete = back => {
 
 // ---- drag and drop ---------------------------------------------------------
 
-const drag = e => e.dataTransfer.setData("text", getPath(e.target));
+let $drag = null;
+const dragStart = e =>
+  e.dataTransfer.setData("text/plain",
+                         location.origin + getPath($drag = e.target));
+const dragEnd = e => $drag = null;
 
-$("control").addEventListener("dragover", stopEvent);
-$("control").addEventListener("drop", ev => {
-  ev.preventDefault();
-  mainOp(ev, $(e.dataTransfer.getData("text")));
-});
+const addDragEvents = (elt, op) => {
+  let count = 0;
+  const YtoElt = e => {
+    if (e.target != $plist) {
+      return e.pageY - e.target.offsetTop > e.target.offsetHeight / 2
+             ? e.target.nextElementSibling : e.target;
+    } else {
+      const fst = $plist.firstElementChild;
+      if (fst && e.pageY <= fst.offsetTop) return fst;
+      return null;
+    }
+  };
+  elt.addEventListener("dragover", e => {
+    if (!$drag) return;
+    stopEvent(e);
+    if (elt != $plist) return;
+    const di = YtoElt(e);
+    if (di) { $.dragitem = di; $.dragitem.classList.remove("bottom"); }
+    else if ($.dragitem = $plist.lastElementChild)
+      $.dragitem.classList.add("bottom");
+  });
+  elt.addEventListener("dragenter", e => {
+    if (!$drag) return;
+    stopEvent(e);
+    if (count++ == 0); elt.classList.add("drag-to");
+  });
+  elt.addEventListener("dragleave", e => {
+    if (!$drag) return;
+    stopEvent(e);
+    if (--count == 0) elt.classList.remove("drag-to"); });
+  elt.addEventListener("drop", e => {
+    if (!$drag) return;
+    stopEvent(e); count = 0; elt.style.backgroundColor = "";
+    op(e, $drag, U, elt == $plist ? YtoElt(e) : U);
+    $drag = null;
+    $.dragitem = null;
+  });
+};
+
+addDragEvents($("control"), mainOp);
+addDragEvents($plist, plistOp);
 
 // ---- player interactions ---------------------------------------------------
 
