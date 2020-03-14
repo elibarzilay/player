@@ -1,7 +1,5 @@
 "use strict";
 
-// !!! Adding an item to plist => don't play if something is already playing
-//     Add it as the currently playing item if we're adding the playing item
 // !!! implement a quick-find thing (over just the current displayed list)
 // !!! "/" implement a search filtering for the main list, using the
 //     quickfinder from pl
@@ -15,14 +13,15 @@ const fadeToFreq = 20, pauseFade = 0.5, switchFade = 0.25; // time for 0-1 fade
 const imageDelayTime = 2, imageCycleTime = 60, imageExplicitTime = 120;
 const tickerTime = 60, tickerSwapTime = 1;
 const waveNeedleColor = "#f00a", waveNeedleWidth = 4;
-const analyzerSmoothing = 0.5, analyzerBins = 1024;
+const analyzerSmoothing = 0.5, analyzerBins = 512;
 const analyzerWaveColor = "#ffcc", analyzerBinsColor = "#844";
 
 // ---- utils -----------------------------------------------------------------
 
 const $ = x => document.getElementById(x);
 const rec = f => f((...xs) => rec(f)(...xs));
-const isArray = Array.isArray;
+const isArray  = Array.isArray;
+const isFinite = Number.isFinite;
 const U = undefined;
 
 const clipRange = (lo, x, hi) => Math.max(Math.min(x,hi), lo);
@@ -438,9 +437,9 @@ bind("ArrowRight",     trackSkip(+1));
   if (media) navigator.mediaSession.setActionHandler(media, handler);
 });
 
-const percentJump = e =>
-  $player.currentTime =
-    (+e.code.substring(e.code.length-1)) * $player.duration / 10;
+const percentJump = e => isFinite($player.duration)
+  && ($player.currentTime =
+        (+e.code.substring(e.code.length-1)) * $player.duration / 10);
 bind("0123456789".split("").map(d => "Digit"+d), percentJump);
 
 $player.defaultVolume = 1; $("volume").value = 10;
@@ -462,7 +461,7 @@ const formatTime = t => {
   return Math.floor(t/60) + ":" + (s<10 ? "0" : "") + s; };
 
 const updateTimes = ()=> {
-  if (!Number.isFinite($player.duration) || !$.player) {
+  if (!isFinite($player.duration) || !$.player) {
     if (shownTime) { shownTime = null; }
     if (shownURL)  { shownTime = null; }
     $dur.innerText = $time.innerText = "–:––";
@@ -488,14 +487,13 @@ const infoDisplay = (()=> {
   const START = 0, END = 1, CLEARSTART = 2, CLEAREND = 3, NEWTEXT = 4;
   let initialized = false, state = START, newText = "", moveTo = 0;
   //
-  const move = (x, st, {time = tickerTime, text = undefined,
-                        fun = "ease-in-out"} = {}) => {
-    if (text !== undefined) {
+  const move = (x, st, {time = tickerTime, text = U, fun = U} = {}) => {
+    if (text !== U) {
       textDiv.innerText = text;
       moveTo = infoDiv.offsetWidth - textDiv.scrollWidth;
     }
     if (textDiv.innerText == "" && state == NEWTEXT) return;
-    textDiv.style.transition = `left ${time}s ${fun}`;
+    textDiv.style.transition = `left ${time}s ${fun || "ease-in-out"}`;
     textDiv.style.left = `${x}px`;
     state = st;
     if (time <= 0) setTimeout(done, 100);
