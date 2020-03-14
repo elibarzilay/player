@@ -11,7 +11,7 @@
 const autoExpandItems = 30;
 const pgSize = 10;
 const bigSkip = 60, smallSkip = 5, smallerSkipDiv = 2;
-const fadeToFreq = 20, fadeToTime = 0.5; // (for a full 0..1 fade)
+const fadeToFreq = 20, pauseFade = 0.5, switchFade = 0.25; // time for 0-1 fade
 const imageDelayTime = 2, imageCycleTime = 60, imageExplicitTime = 120;
 const tickerTime = 60, tickerSwapTime = 1;
 const waveNeedleColor = "#f00a", waveNeedleWidth = 4;
@@ -128,14 +128,19 @@ const play = (elt = $.selected) => {
   if (elt && getInfo(elt).type != "audio") elt = null;
   $.player = elt;
   const path = elt ? getPath(elt) : null;
-  $player.src = path || "";
-  $("wave-image").src =
-    !elt ? reddishPNG : "/images" + path.replace(/[.][^.]+$/, ".png");
-  updateDisplays();
-  if (!elt) return playerStop();
-  playerPlay().then(startVisualizer).catch(e => {
-    if (e.code != e.ABORT_ERR) throw e; });
-  setBackgroundImageLoop(imageDelayTime);
+  const doPlay = ()=> {
+    $player.volume = $player.defaultVolume;
+    $player.src = path || "";
+    $("wave-image").src =
+      !elt ? reddishPNG : "/images" + path.replace(/[.][^.]+$/, ".png");
+    updateDisplays();
+    if (!elt) return playerStop();
+    playerPlay().then(startVisualizer).catch(e => {
+      if (e.code != e.ABORT_ERR) throw e; });
+    setBackgroundImageLoop(imageDelayTime);
+  }
+  if (!elt || $player.paused) doPlay();
+  else fadeTo([0, switchFade], doPlay);
 };
 
 let unders = [...document.getElementsByClassName("under")];
@@ -169,22 +174,23 @@ const setBackgroundImage = (eltOrPath = $.player) => {
   unders[0].style.opacity = 1.0;
 };
 
-const fadeTo = (tgt, cb) => {
+const fadeTo = (tgtTime, cb) => {
+  const [target, time] = isArray(tgtTime) ? tgtTime : [tgtTime, pauseFade];
   const fade = ()=> {
     const now = Date.now();
     if ($player.paused || now >= end) {
-      $player.volume = tgt;
+      $player.volume = target;
       fadeTo.timer = null;
       if (cb) cb();
       return;
     }
-    $player.volume = tgt + dir * (end - now) / (1000 * fadeToTime);
+    $player.volume = target + dir * (end - now) / (1000 * time);
     fadeTo.timer = setTimeout(fade, 1000/fadeToFreq);
   };
   if (fadeTo.timer) clearTimeout(fadeTo.timer);
   fadeTo.timer = setTimeout(fade, 1000/fadeToFreq);
-  const from = $player.volume, dir = from > tgt ? +1 : -1;
-  const end  = Date.now() + 1000 * fadeToTime * Math.abs(tgt - from);
+  const from = $player.volume, dir = from > target ? +1 : -1;
+  const end  = Date.now() + 1000 * time * Math.abs(target - from);
 };
 
 let nowPausing = false;
