@@ -16,9 +16,8 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
 }
 .itemlist.drag-to { background: #8084; }
 .itemlist.volumebg { background: var(--volume); }
-#main     { float: left; }
-#playlist { float: right;
-            margin-top: 11ex; height: calc(var(--height) - 11ex); }
+#main  { float: left;  margin-top: 4.5ex; height: calc(var(--height) - 4.5ex); }
+#plist { float: right; margin-top:  11ex; height: calc(var(--height) -  11ex); }
 
 .list, .item { padding-left: 0.25ex; }
 .list {
@@ -58,14 +57,18 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
 }
 .drag-to .item.dragitem.bottom::before { top: auto; bottom: -2px; }
 
-#control {
-  position: fixed; white-space: nowrap; user-select: none;
-  right: var(--page-margin); top: var(--page-margin);
-  width: calc(49vw - 3em); padding: 0.5ex 1em;
+#control-panel, #search-panel {
+  position: fixed; top: var(--page-margin); white-space: nowrap;
   background: #2228; border: 1px solid #3338; border-radius: 5px;
 }
-#control.drag-to { background: #4448; }
-#control > div { display: inline-block; }
+
+#control-panel {
+  user-select: none;
+  right: var(--page-margin); padding: 0.5ex 1em;
+  width: calc(49vw - var(--page-margin) - 2em);
+}
+#control-panel.drag-to { background: #4448; }
+#control-panel > div { display: inline-block; }
 #visualization { width: calc(49vw - 17em); height: 6ex; }
 #wave { display: block; width: 10em; height: 2ex; }
 
@@ -104,6 +107,16 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
 #times > div { text-align: right; }
 #time { border-bottom: 1px solid #fff }
 #dur  { border-top: 1px solid #fff }
+
+#search-panel {
+  left: var(--page-margin); padding: 0.5ex 1em;
+  width: calc(49vw - var(--page-margin) - 2em);
+  text-align: right;
+}
+#search {
+  background: #222; color: #fff; border: 1px solid #444; padding: 0 0.5ex;
+  font-size: 120%;
+}
 
 .under {
   position: fixed; left: 0; top: 0; z-index: -9;

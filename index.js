@@ -1,9 +1,5 @@
 "use strict";
 
-// !!! implement a quick-find thing (over just the current displayed list)
-// !!! "/" implement a search filtering for the main list, using the
-//     quickfinder from pl
-
 // ---- config ----------------------------------------------------------------
 
 const autoExpandItems = 30;
@@ -78,8 +74,8 @@ const processData = data => {
 
 // ---- rendering -------------------------------------------------------------
 
-const $main = $("main");
-const $plist = $("playlist");
+const $main  = $("main");
+const $plist = $("plist");
 
 const infoMap = new WeakMap();
 const getInfo = elt => infoMap.get(elt);
@@ -291,7 +287,10 @@ const selectEdge = (n, opts) =>
   selectNext(($.selected && !isMainItem($.selected)) ? $plist : $main, n, opts);
 
 const expandDir = (elt = $.selected, info = getInfo(elt), expand = "maybe") => {
-  if (expand == "maybe") expand = info.size > autoExpandItems || "deep";
+  if (expand == "toggle")
+    expand = elt.parentElement.classList.contains("open") ? false : "maybe";
+  if (expand == "maybe")
+    expand = info.size > autoExpandItems || "deep";
   if (expand == "deep") {
     if (info.type != "dir") return;
     elt.parentElement.classList.add("open");
@@ -335,8 +334,9 @@ const showOnly = (elt = $.selected, info = getInfo(elt)) => {
 const mainOrPlistOp = (e, ...more) =>
   (stopEvent(e), (e.ctrlKey ? plistOp : mainOp)(e, ...more));
 
-const mainOp = (ev, elt = $.selected, info = getInfo(elt)) =>
-  info.type == "dir"   ? showOnly(elt, info) :
+const mainOp = (e, elt = $.selected, info = getInfo(elt)) =>
+  info.type == "dir"   ? (e.shiftKey ? expandDir(U, U, "toggle")
+                                     : showOnly(elt, info)) :
   info.type == "audio" ? play(elt) :
   info.type == "image" ? setBackgroundImage(info.path) :
   window.open(info.path, "_blank");
@@ -361,8 +361,8 @@ const plistOp = (e, elt = $.selected, info = getInfo(elt), dragTo) => {
   if (drag && !isMainItem(elt))
     return $plist.insertBefore($drag, dragTo);
   if (!isMainItem(elt)) {
-    showOnly($(info.parent.path));
-    $(info.path).focus();
+    showOnly(info.parent.elt);
+    info.elt.focus();
     return;
   }
   const render = dragTo
@@ -371,7 +371,7 @@ const plistOp = (e, elt = $.selected, info = getInfo(elt), dragTo) => {
   const add = info =>
     info.type == "dir"     ? info.children.forEach(add)
     : info.type != "audio" ? U
-    : $.player == elt      ? $.player = $.altitem = render(info)
+    : $.player == info.elt ? $.player = $.altitem = render(info)
     : $.altitem            ? render(info)
     : $.player             ? $.altitem = render(info)
     :                        play($.altitem = render(info));
@@ -450,13 +450,14 @@ const addDragEvents = (elt, op) => {
   });
 };
 
-addDragEvents($("control"), mainOp);
+addDragEvents($("control-panel"), mainOp);
 addDragEvents($plist, plistOp);
 
 // ---- player interactions ---------------------------------------------------
 
 bind("Enter", mainOrPlistOp);
 bind("Tab", switchMain);
+bind("/", ()=> $search.focus());
 
 bind(["Backspace", "Delete"], e => plistDelete(e.key == "Backspace"));
 
@@ -617,16 +618,55 @@ $wave.addEventListener("mousedown", e => {
   move(e);
 });
 
+// ---- search ----------------------------------------------------------------
+
+const $search = $("search");
+
+$search.addEventListener("keydown", e => e.stopImmediatePropagation());
+
 // ---- initialization --------------------------------------------------------
 
-const setParent = parent => parent.children && parent.children.forEach(
-  child => { child.parent = parent; setParent(child); });
+const addLazyProp = (o, name, get) =>
+  Object.defineProperty(o, name, {configurable: true, get: ()=> {
+    const value = get(o);
+    Object.defineProperty(o, name, {value, writable: true});
+    return value;
+  }});
+
+const addLazyProps = info => {
+  addLazyProp(info, "elt", ()=> $(info.path));
+  if (info.type != "audio") return;
+  const txt = x => x ? " " + x : "";
+  addLazyProp(info, "search", ()=>
+    (info.path + txt(info.title) + txt(info.album) + txt(info.track)
+     + txt(info.date) + txt(info.artist)).toLowerCase());
+};
+
+const setExtras = ()=> {
+  let first = null, last = null, border = [all], nexts = [all];
+  const loop = parent => parent.children.forEach(child => {
+    child.parent = parent;
+    if (last) child.preva = last; else border.push(child);
+    if (child.type == "audio") {
+      if (!first) first = child;
+      nexts.forEach(n => n.nexta = child); nexts.length = 0;
+      last = child;
+    }
+    nexts.push(child);
+    if (child.children) loop(child);
+    addLazyProps(child);
+  });
+  loop(all);
+  addLazyProps(all);
+  nexts .forEach(n => n.nexta = first); nexts .length = 0;
+  border.forEach(n => n.preva = last ); border.length = 0;
+};
 
 const updateDisplays = ()=> (updateTimes(), updateTrackInfo());
 
 const init = data => {
   all = data;
-  setParent(all);
+  setExtras();
   renderItem($main, all, true);
   $main.firstElementChild.classList.add("open");
   selectNext($main, +1);
