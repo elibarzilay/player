@@ -37,6 +37,8 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
 .item.dir { font-size: 150%; font-weight: bold; }
 .list.open > .item.dir { text-decoration: underline; }
 
+.item.found { color: #bf6; text-shadow: 2px 2px 4px #bf6c; }
+
 .item.other { color: #888; }
 .item.image { font-style: italic; color: #888; }
 .item.other, .item.video { color: #888; }
@@ -48,6 +50,7 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
   font-family: "MediaButtons"; content: "444444"; color: var(--volume);
   z-index: 2; position: absolute; right: 0; width: 50%; padding: 0 0.25ex;
   transform: scale(-3, 2); transform-origin: 25% 50%;
+  text-shadow: none;
 }
 
 .drag-to .item.dragitem { position: relative; }
@@ -117,6 +120,7 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
   background: #222; color: #fff; border: 1px solid #444; padding: 0 0.5ex;
   font-size: 120%;
 }
+#search.not-found { background: #522; }
 
 .under {
   position: fixed; left: 0; top: 0; z-index: -9;
