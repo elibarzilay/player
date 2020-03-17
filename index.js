@@ -124,6 +124,7 @@ const $player = $("player");
 const play = (elt = $.selected) => {
   if (typeof elt == "string") elt = $(elt);
   if (elt && getInfo(elt).type != "audio") elt = null;
+  if ($.player == elt) $player.currentTime = 0;
   $.player = elt;
   const path = elt ? getPath(elt) : null;
   const doPlay = ()=> {
@@ -244,7 +245,9 @@ const playerNextPrev = down => {
   let item = $.player;
   if (!item) return;
   if (document.activeElement == $search && isMainItem(item)) {
-    item = nextSearchTrack(down);
+    if (search.origin.elt == item || search.origin.type != "audio")
+      searchNext(1);
+    item = search.origin.elt;
   } else {
     do { item = nextItem(item, down); }
     while (item && item != $.player && getInfo(item).type != "audio");
@@ -497,8 +500,9 @@ bind("Tab", switchMain);
 const initiateSearch = e => {
   if (e) $search.value = e.key; else $search.select();
   $search.focus(); }
-bind("/", ()=> initiateSearch());
-bind("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(l => "Key"+l), initiateSearch);
+bind("/", ()=> initiateSearch(), notCtrl);
+bind("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(l => "Key"+l),
+     initiateSearch, notCtrl);
 
 bind(["Backspace", "Delete"], e => plistDelete(e.key == "Backspace"));
 
@@ -681,15 +685,15 @@ const showSearch = (origin = search.origin) => {
   showCurSearch();
 };
 
-const nextSearchTrack = down => {
-  if (!search.ok || !$.player) return;
-  const len = search.results.length;
-  if (len == 0) return;
-  const cur = search.results.indexOf(getInfo($.player));
-  if (cur) return search.results[mod(cur + (down ? +1 : -1), len)].elt;
-  if (search.origin && search.origin.type == "audio") return search.origin.elt;
-  return search.results[0].elt;
-};
+// const nextSearchTrack = down => {
+//   if (!search.ok || !$.player) return;
+//   const len = search.results.length;
+//   if (len == 0) return;
+//   const cur = search.results.indexOf(getInfo($.player));
+//   if (cur >= 0) return search.results[mod(cur + (down ? +1 : -1), len)].elt;
+//   if (search.origin && search.origin.type == "audio") return search.origin.elt;
+//   return search.results[0].elt;
+// };
 
 const searchNext = (delta, wrap = true) => {
   if (!search.ok) return;
@@ -707,7 +711,7 @@ const showCurSearch = ()=> {
   isHidden(cur.elt) ? showOnly(cur, false) : $.selected = cur.elt;
   cur.elt.scrollIntoView(
     {behavior: "auto", block: "nearest", inline: "nearest"});
-  $("result-number").innerText = (search.cur+1) + "/" + len;
+  $("result-number").innerText = (search.cur + 1) + "/" + len;
   return cur;
 };
 
@@ -740,12 +744,13 @@ const searchKey = e => {
       || (ctrl            && code.startsWith("Digit")))
     return;
   e.stopImmediatePropagation();
-  if (["Escape", "Tab"].includes(key)) {
-    e.preventDefault(); $.selected.focus(); }
+  if (["Escape", "Tab"].includes(key)) $.selected.focus();
   else if (key == "ArrowUp")   searchNext(-1);
   else if (key == "ArrowDown") searchNext(+1);
   else if (key == "PageUp")    searchNext(-pgSize, false);
   else if (key == "PageDown")  searchNext(+pgSize, false);
+  else return;
+  e.preventDefault();
 };
 
 $search.addEventListener("focus", search);
