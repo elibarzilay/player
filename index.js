@@ -1,7 +1,5 @@
 "use strict";
 
-// trackSkip should go to prev/next tracks
-
 // ---- config ----------------------------------------------------------------
 
 const autoExpandItems = 30;
@@ -217,10 +215,30 @@ const playerPlayPause = ({ctrlKey}) =>
   : $player.paused || $player.pausing ? playerPlay()
   :                                     playerPause();
 
-const trackSkip = dir => ({shiftKey, ctrlKey}) =>
-  $.player && ($player.currentTime +=
-                 dir * (ctrlKey ? bigSkip : smallSkip)
-                     / (shiftKey ? smallerSkipDiv : 1));
+$player.leftoverSkip = null; // made up field
+const doLeftoverSkip = ()=> {
+  if (!$player.leftoverSkip) return;
+  const t = $player.leftoverSkip; $player.leftoverSkip = null;
+  trackSkipTo(t > 0 ? t : $player.duration + t);
+};
+const trackSkipTo = time => {
+  if (!$player.path) return;
+  if (time < 0) {
+    $player.leftoverSkip = time;
+    playerNextPrev(false);
+  } else if (isFinite($player.duration) && time > $player.duration) {
+    $player.leftoverSkip = time - $player.duration;
+    playerNextPrev(true);
+  } else {
+    $player.currentTime = time;
+  }
+};
+const trackSkip = dir => ({shiftKey, ctrlKey}) => {
+  const delta = dir * (ctrlKey ? bigSkip : smallSkip)
+                    / (shiftKey ? smallerSkipDiv : 1);
+  if ($player.leftoverSkip) $player.leftoverSkip += delta;
+  else trackSkipTo($player.currentTime + delta);
+};
 
 const playerNextPrev = down => {
   let item = $.player;
@@ -239,6 +257,7 @@ const playerButtonsPlaying = playing =>
 $player.addEventListener("play",  ()=> playerButtonsPlaying(true));
 $player.addEventListener("pause", ()=> playerButtonsPlaying(false));
 $player.addEventListener("ended", ()=> playerNextPrev(true));
+$player.addEventListener("loadeddata", doLeftoverSkip);
 
 // ---- navigation ------------------------------------------------------------
 
