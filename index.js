@@ -1,6 +1,6 @@
 "use strict";
 
-// next/prev track should be limited to found tracks when search is active
+// trackSkip should go to prev/next tracks
 
 // ---- config ----------------------------------------------------------------
 
@@ -225,8 +225,12 @@ const trackSkip = dir => ({shiftKey, ctrlKey}) =>
 const playerNextPrev = down => {
   let item = $.player;
   if (!item) return;
-  do { item = nextItem(item, down); }
-  while (item && item != $.player && getInfo(item).type != "audio");
+  if (document.activeElement == $search && isMainItem(item)) {
+    item = nextSearchTrack(down);
+  } else {
+    do { item = nextItem(item, down); }
+    while (item && item != $.player && getInfo(item).type != "audio");
+  }
   if (item != $.player) play(item);
 };
 
@@ -658,6 +662,16 @@ const showSearch = (origin = search.origin) => {
   showCurSearch();
 };
 
+const nextSearchTrack = down => {
+  if (!search.ok || !$.player) return;
+  const len = search.results.length;
+  if (len == 0) return;
+  const cur = search.results.indexOf(getInfo($.player));
+  if (cur) return search.results[mod(cur + (down ? +1 : -1), len)].elt;
+  if (search.origin && search.origin.type == "audio") return search.origin.elt;
+  return search.results[0].elt;
+};
+
 const searchNext = (delta, wrap = true) => {
   if (!search.ok) return;
   const len = search.results.length;
@@ -701,14 +715,18 @@ const search = e => {
 search.results = [];
 
 const searchKey = e => {
-  if (e.key == "Enter" || (e.key == " " && (e.shiftKey || e.ctrlKey))) return;
+  const {key, code, shiftKey: shift, ctrlKey: ctrl} = e;
+  if (key == "Enter"
+      || ((shift || ctrl) && (key == " " || code.startsWith("Numpad")))
+      || (ctrl            && code.startsWith("Digit")))
+    return;
   e.stopImmediatePropagation();
-  if (["Escape", "Tab"].includes(e.key)) {
+  if (["Escape", "Tab"].includes(key)) {
     e.preventDefault(); $.selected.focus(); }
-  else if (e.key == "ArrowUp")   searchNext(-1);
-  else if (e.key == "ArrowDown") searchNext(+1);
-  else if (e.key == "PageUp")    searchNext(-pgSize, false);
-  else if (e.key == "PageDown")  searchNext(+pgSize, false);
+  else if (key == "ArrowUp")   searchNext(-1);
+  else if (key == "ArrowDown") searchNext(+1);
+  else if (key == "PageUp")    searchNext(-pgSize, false);
+  else if (key == "PageDown")  searchNext(+pgSize, false);
 };
 
 $search.addEventListener("focus", search);
