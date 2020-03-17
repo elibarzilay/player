@@ -1,7 +1,6 @@
 "use strict";
 
 // next/prev track should be limited to found tracks when search is active
-// when focus goes back to search, revive focus marks etc for the search text
 
 // ---- config ----------------------------------------------------------------
 
@@ -471,7 +470,12 @@ addDragEvents($plist, plistOp);
 
 bind("Enter", mainOrPlistOp);
 bind("Tab", switchMain);
-bind("/", ()=> { $search.focus(); $search.select(); });
+
+const initiateSearch = e => {
+  if (e) $search.value = e.key; else $search.select();
+  $search.focus(); }
+bind("/", ()=> initiateSearch());
+bind("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(l => "Key"+l), initiateSearch);
 
 bind(["Backspace", "Delete"], e => plistDelete(e.key == "Backspace"));
 
@@ -635,9 +639,10 @@ $wave.addEventListener("mousedown", e => {
 
 const $search = $("search");
 
-const showSearch = ()=> {
+const showSearch = (origin = search.origin) => {
+  let n0 = search.origin = origin;
   if (!search.ok) return removeSearch();
-  let n0 = search.origin; if (n0.type != "audio") n0 = n0.nexta;
+  if (n0.type != "audio") n0 = n0.nexta;
   const ok = search.ok, fst = all.nexta;
   let n = n0, results = [], later;
   do {
@@ -679,8 +684,12 @@ const removeSearch = ()=> {
 };
 
 const search = e => {
-  if (e.type == "focus") return search.origin = getInfo($.selected);
-  if (e.type == "blur")  return removeSearch();
+  if (e.type == "blur") return removeSearch();
+  if (e.type == "focus") {
+    showSearch(getInfo($.selected));
+    if (!search.initial) return;
+    $search.value = search.initial; search.initial = null;
+  }
   const searchStr = $search.value.toLowerCase().trim().replace(/\s+/g, " ");
   if (search.last == searchStr) return; else search.last = searchStr;
   const searchStrs = searchStr.split(" ");
@@ -692,7 +701,7 @@ const search = e => {
 search.results = [];
 
 const searchKey = e => {
-  if (e.key == "Enter") return;
+  if (e.key == "Enter" || (e.key == " " && (e.shiftKey || e.ctrlKey))) return;
   e.stopImmediatePropagation();
   if (["Escape", "Tab"].includes(e.key)) {
     e.preventDefault(); $.selected.focus(); }
