@@ -1,6 +1,7 @@
 "use strict";
 
-// stand on mystuff, search for 0 => loses focus
+// next/prev track should be limited to found tracks when search is active
+// when focus goes back to search, revive focus marks etc for the search text
 
 // ---- config ----------------------------------------------------------------
 
@@ -291,27 +292,32 @@ const selectNext = (elt = $.selected, n = 0, opts) => {
 const selectEdge = (n, opts) =>
   selectNext(($.selected && !isMainItem($.selected)) ? $plist : $main, n, opts);
 
-const expandDir = (info = getInfo($.selected), expand = "??", next = true) => {
-  const elt = info.elt;
+const expandDir = (info = getInfo($.selected), expand = "??", focus = true) => {
+  let elt = info.elt;
   if (expand == "toggle")
-    expand = elt.parentElement.classList.contains("open") ? false : "??";
+    expand = elt.parentElement.classList.contains("open")
+             && !elt.nextElementSibling.classList.contains("only")
+             ? false : "??";
   if (expand == "??")
     expand = info.size > autoExpandItems || "deep";
-  if (expand == "deep") {
+  if (expand) {
     if (info.type != "dir") return;
+    if (elt.parentElement.classList.contains("open")
+        && elt.nextElementSibling.classList.contains("only")) {
+      elt.nextElementSibling.classList.remove("only");
+    }
     elt.parentElement.classList.add("open");
-    for (const e of elt.parentElement.querySelectorAll(".list"))
-      e.classList.add("open");
-  } else if (expand) {
-    if (info.type == "dir") elt.parentElement.classList.add("open");
-    if (next) selectNext(elt, 1);
+    if (expand == "deep")
+      for (const e of elt.parentElement.querySelectorAll(".list"))
+        e.classList.add("open");
+    if (focus) selectNext(elt, 1);
   } else {
     if (info.type != "dir") {
       elt = elt.parentElement.previousElementSibling;
     } else if (isHidden(elt.nextElementSibling)) {
       elt = elt.parentElement.parentElement.previousElementSibling;
     }
-    elt.focus();
+    if (focus) elt.focus();
     elt.parentElement.classList.remove("open");
     for (const e of elt.parentElement.querySelectorAll(".list"))
       e.classList.remove("open");
@@ -324,17 +330,13 @@ const showOnly = (info = getInfo($.selected), focus = true) => {
   let elt = info.elt;
   const toSelect = elt.parentElement.classList.contains("only")
                    && nextItem(elt, true);
-  for (const e of $main.querySelectorAll(".open"))
-    e.classList.remove("open");
-  for (const e of $main.querySelectorAll(".only"))
-    e.classList.remove("only");
+  for (const qs of ["open", "only"])
+    for (const e of $main.querySelectorAll("." + qs)) e.classList.remove(qs);
   expandDir(info, U, focus);
-  elt.parentElement.classList.add("open");
-  while (elt != $main) {
-    elt.classList.add("only");
-    elt.classList.add("open");
-    elt = elt.parentElement;
-  }
+  do {
+    elt = elt.parentElement; elt.classList.add("open", "only");
+    elt = elt.parentElement; elt.classList.add("only");
+  } while (elt != $main);
   if (!focus) return;
   if (toSelect) return toSelect.focus();
   const f = elt0 && nextItem(elt0, true); if (f) return f.focus();
@@ -348,8 +350,7 @@ const mainOrPlistOp = (e, elt = $.selected, info = getInfo(elt)) => {
 };
 
 const mainOp = (e, elt = $.selected, info = getInfo(elt)) =>
-  info.type == "dir"   ? (e.shiftKey ? expandDir(U, "toggle")
-                                     : showOnly(info)) :
+  info.type == "dir" ? (e.shiftKey ? expandDir(U, "toggle") : showOnly(info)) :
   info.type == "audio" ? play(elt) :
   info.type == "image" ? setBackgroundImage(info.path) :
   window.open(info.path, "_blank");
