@@ -761,6 +761,7 @@ const updateDisplays = (src = $player.path) => {
     !src ? reddishPNG : "/images" + src.replace(/[.][^.]+$/, ".png");
   updateTimes();
   updateTrackInfo();
+  if (!src && startVisualizer.clear) startVisualizer.clear();
 };
 
 const init = data => {
@@ -805,10 +806,12 @@ const startVisualizer = ()=> {
     stopEvent(e);
   });
   const cCtx = vCanvas.getContext("2d");
+  startVisualizer.clear = ()=> cCtx.clearRect(0, 0, vCanvas.width, vCanvas.height);
   const draw = ()=> {
     requestAnimationFrame(draw);
+    if ($player.paused || $player.pausing) return;
     updateTimes();
-    cCtx.clearRect(0, 0, vCanvas.width, vCanvas.height);
+    startVisualizer.clear();
     if (!mode) return;
     const sliceWidth = vCanvas.width / bufLen;
     let avg1 = 0, avg2 = 0;
