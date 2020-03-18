@@ -721,8 +721,13 @@ const removeSearch = ()=> {
 };
 
 const search = e => {
-  if (e.type == "blur") return removeSearch();
+  if (e.type == "blur") {
+    if (e.relatedTarget) { search.blurTime = null; return removeSearch(); }
+    else { search.blurTime = e.timeStamp; return $search.focus(); }
+  }
   if (e.type == "focus") {
+    if (search.blurTime && (e.timeStamp - search.blurTime) < 200)
+      return search.blurTime = null;
     showSearch(getInfo($.selected));
     if (!search.initial) return;
     $search.value = search.initial; search.initial = null;
