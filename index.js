@@ -419,8 +419,9 @@ const plistOp = (e, elt = $.selected, info = getInfo(elt), dragTo) => {
     selectNext(U, +1, {wrap: false, sub: false});
 };
 
-const plistDelete = back => {
-  const item = $.selected;
+const plistDelete = backOrElt => {
+  const [back, item] = backOrElt instanceof Element
+                       ? [false, backOrElt] : [backOrElt, $.selected];
   if (!item || isMainItem(item)) return;
   const toDelete = back ? item.previousElementSibling : item;
   if (!toDelete) return;
@@ -450,7 +451,7 @@ const dragStart = e =>
                          location.origin + getPath($drag = e.target));
 const dragEnd = e => $drag = null;
 
-const addDragEvents = (elt, op) => {
+const addDragEvents = (elt, op, dragOK = null) => {
   let count = 0;
   const YtoElt = e => {
     if (e.target != $plist) {
@@ -462,35 +463,30 @@ const addDragEvents = (elt, op) => {
       return null;
     }
   };
-  elt.addEventListener("dragover", e => {
-    if (!$drag) return;
-    stopEvent(e);
+  const dragHandle = handler => e =>
+    $drag && (!dragOK || dragOK(e)) && (stopEvent(e), handler(e));
+  elt.addEventListener("dragover", dragHandle(e => {
     if (elt != $plist) return;
     const di = YtoElt(e);
     if (di) { $.dragitem = di; $.dragitem.classList.remove("bottom"); }
     else if ($.dragitem = $plist.lastElementChild)
       $.dragitem.classList.add("bottom");
-  });
-  elt.addEventListener("dragenter", e => {
-    if (!$drag) return;
-    stopEvent(e);
-    if (count++ == 0); elt.classList.add("drag-to");
-  });
-  elt.addEventListener("dragleave", e => {
-    if (!$drag) return;
-    stopEvent(e);
-    if (--count == 0) elt.classList.remove("drag-to"); });
-  elt.addEventListener("drop", e => {
-    if (!$drag) return;
-    stopEvent(e); count = 0; elt.style.backgroundColor = "";
+  }));
+  elt.addEventListener("dragenter", dragHandle(e =>
+    count++ == 0 && elt.classList.add("drag-to")));
+  elt.addEventListener("dragleave", dragHandle(e =>
+    --count == 0 && elt.classList.remove("drag-to")));
+  elt.addEventListener("drop", dragHandle(e => {
+    count = 0; elt.classList.remove("drag-to");
     op(e, $drag, U, elt == $plist ? YtoElt(e) : U);
     $drag = null;
     $.dragitem = null;
-  });
+  }));
 };
 
 addDragEvents($("control-panel"), mainOp);
 addDragEvents($plist, plistOp);
+addDragEvents($main, (e, d) => plistDelete(d), e => !isMainItem($drag));
 
 // ---- player interactions ---------------------------------------------------
 
