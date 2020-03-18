@@ -24,6 +24,13 @@ const mod = (n, m) => { const r = n % m; return r < 0 ? r + m : r; };
 const clipRange = (lo, x, hi) => Math.max(Math.min(x,hi), lo);
 const clip01 = x => clipRange(0, x, 1);
 
+const addLazyProp = (o, name, get) =>
+  Object.defineProperty(o, name, {configurable: true, get: ()=> {
+    const value = get(o);
+    Object.defineProperty(o, name, {value, writable: true});
+    return value;
+  }});
+
 const shuffle = xs => {
   xs = xs.slice();
   xs.forEach((x,i) => {
@@ -71,6 +78,37 @@ const processData = data => {
   p("")(data);
   localStorage.all = JSON.stringify(data);
   return data;
+};
+
+// ---- additional runtime data -----------------------------------------------
+
+const addLazyInfoProps = info => {
+  addLazyProp(info, "elt", ()=> $(info.path));
+  if (info.type != "audio") return;
+  const txt = x => x ? " " + x : "";
+  addLazyProp(info, "search", ()=>
+    (info.path + txt(info.title) + txt(info.album) + txt(info.track)
+     + txt(info.date) + txt(info.artist)).toLowerCase());
+};
+
+const setAllExtras = ()=> {
+  let first = null, last = null, border = [all], nexts = [all];
+  const loop = parent => parent.children.forEach(child => {
+    child.parent = parent;
+    if (last) child.preva = last; else border.push(child);
+    if (child.type == "audio") {
+      if (!first) first = child;
+      nexts.forEach(n => n.nexta = child); nexts.length = 0;
+      last = child;
+    }
+    nexts.push(child);
+    if (child.children) loop(child);
+    addLazyInfoProps(child);
+  });
+  loop(all);
+  addLazyInfoProps(all);
+  nexts .forEach(n => n.nexta = first); nexts .length = 0;
+  border.forEach(n => n.preva = last ); border.length = 0;
 };
 
 // ---- rendering -------------------------------------------------------------
@@ -246,18 +284,14 @@ const playerNextPrev = down => {
   if (!item) return;
   if (document.activeElement == $search && isMainItem(item)) {
     if (search.origin.elt == item || search.origin.type != "audio")
-      searchNext(1, $player.loopMode);
+      searchNext(1, loopMode.on);
     item = search.origin && search.origin.elt;
   } else {
-    do { item = nextItem(item, down, {wrap: $player.loopMode}); }
+    do { item = nextItem(item, down, {wrap: loopMode.on}); }
     while (item && item != $.player && getInfo(item).type != "audio");
   }
   play(item);
 };
-
-$player.loopMode = true; // made up field
-const toggleLoop = ()=>
-  $("loop").classList.toggle("on", $player.loopMode = !$player.loopMode);
 
 const playerButtonsPlaying = playing =>
   $("playerbuttons").classList.toggle("playing", playing);
@@ -265,6 +299,16 @@ $player.addEventListener("play",  ()=> playerButtonsPlaying(true));
 $player.addEventListener("pause", ()=> playerButtonsPlaying(false));
 $player.addEventListener("ended", ()=> playerNextPrev(true));
 $player.addEventListener("loadeddata", doLeftoverSkip);
+
+$player.path = ""; // made up field
+const updateDisplays = (src = $player.path) => {
+  if ($player.path != src) $player.src = $player.path = src;
+  $("wave-image").src =
+    !src ? reddishPNG : "/images" + src.replace(/[.][^.]+$/, ".png");
+  updateTimes();
+  updateTrackInfo();
+  if (!src && startVisualizer.clear) startVisualizer.clear();
+};
 
 // ---- navigation ------------------------------------------------------------
 
@@ -492,6 +536,24 @@ addDragEvents($("control-panel"), mainOp);
 addDragEvents($plist, plistOp);
 addDragEvents($main, (e, d) => plistDelete(d), e => !isMainItem($drag));
 
+// ---- toggles ---------------------------------------------------------------
+
+const mkToggle = (id, cb = null) => {
+  const elt = $(id);
+  const toggle = ()=> {
+    elt.classList.toggle("on", (toggle.on = !toggle.on));
+    if (cb) cb(toggle.on);
+  };
+  toggle.on = elt.classList.contains("on");
+  elt.addEventListener("click", toggle);
+  return toggle;
+};
+const loopMode = mkToggle("loop");
+const bigvizMode = mkToggle("bigviz", on => {
+  $main.classList.toggle("volumebg", on);
+  $plist.classList.toggle("volumebg", on);
+});
+
 // ---- player interactions ---------------------------------------------------
 
 bind("Enter", mainOrPlistOp);
@@ -527,7 +589,6 @@ bind("ArrowRight",     trackSkip(+1));
  ["Numpad6", "p-next",  "nexttrack",     ()=> playerNextPrev(true)],
  ["Numpad1", "p-rew",   "seekbackward",  trackSkip(-2)],
  ["Numpad3", "p-fwd",   "seekbackward",  trackSkip(+2)],
- [null,      "loop",    null,            toggleLoop],
 ].forEach(([key, id, media, handler]) => {
   if (key)   bind(key, handler);
   if (id)    $(id).addEventListener("click", handler);
@@ -768,73 +829,6 @@ $search.addEventListener("blur",  search);
 $search.addEventListener("input", search);
 $search.addEventListener("keydown", searchKey);
 
-// ---- initialization --------------------------------------------------------
-
-const addLazyProp = (o, name, get) =>
-  Object.defineProperty(o, name, {configurable: true, get: ()=> {
-    const value = get(o);
-    Object.defineProperty(o, name, {value, writable: true});
-    return value;
-  }});
-
-const addLazyProps = info => {
-  addLazyProp(info, "elt", ()=> $(info.path));
-  if (info.type != "audio") return;
-  const txt = x => x ? " " + x : "";
-  addLazyProp(info, "search", ()=>
-    (info.path + txt(info.title) + txt(info.album) + txt(info.track)
-     + txt(info.date) + txt(info.artist)).toLowerCase());
-};
-
-const setExtras = ()=> {
-  let first = null, last = null, border = [all], nexts = [all];
-  const loop = parent => parent.children.forEach(child => {
-    child.parent = parent;
-    if (last) child.preva = last; else border.push(child);
-    if (child.type == "audio") {
-      if (!first) first = child;
-      nexts.forEach(n => n.nexta = child); nexts.length = 0;
-      last = child;
-    }
-    nexts.push(child);
-    if (child.children) loop(child);
-    addLazyProps(child);
-  });
-  loop(all);
-  addLazyProps(all);
-  nexts .forEach(n => n.nexta = first); nexts .length = 0;
-  border.forEach(n => n.preva = last ); border.length = 0;
-};
-
-$player.path = ""; // made up field
-const updateDisplays = (src = $player.path) => {
-  if ($player.path != src) $player.src = $player.path = src;
-  $("wave-image").src =
-    !src ? reddishPNG : "/images" + src.replace(/[.][^.]+$/, ".png");
-  updateTimes();
-  updateTrackInfo();
-  if (!src && startVisualizer.clear) startVisualizer.clear();
-};
-
-const init = data => {
-  all = data;
-  setExtras();
-  renderItem($main, all, true);
-  $main.firstElementChild.classList.add("open");
-  selectNext($main, +1);
-  updateDisplays("");
-};
-
-fetch("/.player/info", {method: "HEAD"})
-  .then(r => localStorage.date == r.headers.get("last-modified")
-             && localStorage.all
-             ? init(JSON.parse(localStorage.all))
-             : (delete localStorage.all,
-                localStorage.date = r.headers.get("last-modified"),
-                fetch("/.player/info")
-                  .then(r => r.json())
-                  .then(data => init(processData(data)))));
-
 // ---- visualizations --------------------------------------------------------
 
 const startVisualizer = ()=> {
@@ -852,11 +846,6 @@ const startVisualizer = ()=> {
   let mode = 3;
   const rootS = document.documentElement.style;
   vCanvas.addEventListener("click", ()=> mode = (mode+1) % 4);
-  vCanvas.addEventListener("contextmenu", e => {
-    $main.classList.toggle("volumebg");
-    $plist.classList.toggle("volumebg");
-    stopEvent(e);
-  });
   const cCtx = vCanvas.getContext("2d");
   startVisualizer.clear = ()=> cCtx.clearRect(0, 0, vCanvas.width, vCanvas.height);
   const draw = ()=> {
@@ -897,5 +886,30 @@ const startVisualizer = ()=> {
   }
   draw();
 };
+
+// ---- initialization --------------------------------------------------------
+
+// Hack these to fit to right side of parent
+for (let elt of document.querySelectorAll(".fill-right"))
+  elt.style.width = (elt.parentElement.offsetWidth - elt.offsetLeft - 16)+"px";
+
+const init = data => {
+  all = data;
+  setAllExtras();
+  renderItem($main, all, true);
+  $main.firstElementChild.classList.add("open");
+  selectNext($main, +1);
+  updateDisplays("");
+};
+
+fetch("/.player/info", {method: "HEAD"})
+  .then(r => localStorage.date == r.headers.get("last-modified")
+             && localStorage.all
+             ? init(JSON.parse(localStorage.all))
+             : (delete localStorage.all,
+                localStorage.date = r.headers.get("last-modified"),
+                fetch("/.player/info")
+                  .then(r => r.json())
+                  .then(data => init(processData(data)))));
 
 // ----------------------------------------------------------------------------
