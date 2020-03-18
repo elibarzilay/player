@@ -246,14 +246,18 @@ const playerNextPrev = down => {
   if (!item) return;
   if (document.activeElement == $search && isMainItem(item)) {
     if (search.origin.elt == item || search.origin.type != "audio")
-      searchNext(1);
-    item = search.origin.elt;
+      searchNext(1, $player.loopMode);
+    item = search.origin && search.origin.elt;
   } else {
-    do { item = nextItem(item, down); }
+    do { item = nextItem(item, down, {wrap: $player.loopMode}); }
     while (item && item != $.player && getInfo(item).type != "audio");
   }
-  if (item != $.player) play(item);
+  play(item);
 };
+
+$player.loopMode = true; // made up field
+const toggleLoop = ()=>
+  $("loop").classList.toggle("on", $player.loopMode = !$player.loopMode);
 
 const playerButtonsPlaying = playing =>
   $("playerbuttons").classList.toggle("playing", playing);
@@ -523,6 +527,7 @@ bind("ArrowRight",     trackSkip(+1));
  ["Numpad6", "p-next",  "nexttrack",     ()=> playerNextPrev(true)],
  ["Numpad1", "p-rew",   "seekbackward",  trackSkip(-2)],
  ["Numpad3", "p-fwd",   "seekbackward",  trackSkip(+2)],
+ [null,      "loop",    null,            toggleLoop],
 ].forEach(([key, id, media, handler]) => {
   if (key)   bind(key, handler);
   if (id)    $(id).addEventListener("click", handler);
@@ -663,6 +668,7 @@ $wave.addEventListener("mousedown", e => {
 const $search = $("search");
 
 const showSearch = (origin = search.origin) => {
+  if (!origin) origin = getInfo($.selected);
   let n0 = search.origin = origin;
   if (!search.ok) return removeSearch();
   if (n0.type != "audio") n0 = n0.nexta;
@@ -695,14 +701,17 @@ const searchNext = (delta, wrap = true) => {
   if (!search.ok) return;
   const len = search.results.length;
   if (len == 0) return;
-  search.cur = wrap ? mod(search.cur + delta, len)
-                    : clipRange(0, search.cur + delta, len-1);
+  if (wrap) search.cur = mod(search.cur + delta, len);
+  else {
+    search.cur += delta;
+    if (search.cur < 0 || search.cur >= len) search.cur = null;
+  }
   search.origin = showCurSearch();
 };
 
 const showCurSearch = ()=> {
   const len = search.results.length;
-  if (len == 0) return;
+  if (len == 0 || search.cur == null) return null;
   const cur = search.results[search.cur];
   isHidden(cur.elt) ? showOnly(cur, false) : $.selected = cur.elt;
   cur.elt.scrollIntoView(

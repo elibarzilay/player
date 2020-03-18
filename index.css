@@ -80,6 +80,11 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
   position: relative; left: 0; white-space: nowrap; display: inline-block;
 }
 
+#loop {
+  width: 3ex; cursor: pointer; filter: brightness(0.3); transition: filter 0.3s;
+}
+#loop.on { filter: brightness(1); }
+
 #volume {
   width: 8ex; height: 1ex; margin: 0 -3ex; transform: rotate(-90deg);
   position: relative; top: -2.8ex; background: #0000; -webkit-appearance: none;
