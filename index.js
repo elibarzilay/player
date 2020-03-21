@@ -503,22 +503,26 @@ const addDragEvents = (elt, op, dragOK = null) => {
   let count = 0;
   const YtoElt = e => {
     if (e.target != $plist) {
-      return e.pageY - e.target.offsetTop > e.target.offsetHeight / 2
+      return e.offsetY >= e.target.offsetHeight/2
              ? e.target.nextElementSibling : e.target;
     } else {
       const fst = $plist.firstElementChild;
-      if (fst && e.pageY <= fst.offsetTop) return fst;
+      if (fst && e.offsetY <= fst.offsetTop) return fst;
       return null;
     }
   };
   const dragHandle = handler => e =>
     $drag && (!dragOK || dragOK(e)) && (stopEvent(e), handler(e));
+  let oLast = 0;
   elt.addEventListener("dragover", dragHandle(e => {
     if (elt != $plist) return;
+    if (e.timeStamp - oLast <= 100) return; else oLast = e.timeStamp;
     const di = YtoElt(e);
     if (di) { $.dragitem = di; $.dragitem.classList.remove("bottom"); }
     else if ($.dragitem = $plist.lastElementChild)
       $.dragitem.classList.add("bottom");
+    if (di == $plist.firstElementChild)     plist.scrollTop -= 1;
+    else if (di == $plist.lastElementChild) plist.scrollTop += 1;
   }));
   elt.addEventListener("dragenter", dragHandle(e =>
     count++ == 0 && elt.classList.add("drag-to")));
