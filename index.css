@@ -86,6 +86,8 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
           font-size: 150%; }
 .toggle.on { filter: brightness(1); }
 
+#bigviz { background: var(--volume); border-radius: 15%; }
+
 #volume {
   width: 8ex; height: 1ex; margin: 0 -3ex; transform: rotate(-90deg);
   position: relative; top: -2.8ex; background: #0000; -webkit-appearance: none;
@@ -126,7 +128,9 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
   background: #222; color: #fff; border: 1px solid #444; padding: 0 0.5ex;
   font-size: 120%;
 }
-#search.not-found { background: #522; }
+#search:focus { outline: 3px solid #888; text-shadow: 2px 2px 4px #000; }
+#search.found { background: #242; }
+#search.not-found { background: #422; }
 
 .under {
   position: fixed; left: 0; top: 0; z-index: -9;

@@ -605,14 +605,28 @@ const percentJump = e => isFinite($player.duration)
 bind("0123456789".split("").map(d => "Digit"+d), percentJump);
 
 $player.defaultVolume = 1; // made up field
-const $volume = $("volume"); $volume.value = 10;
+const $volume = $("volume"), $volumeStep = +$volume.step; $volume.value = 100;
 const updateVolume = v => {
-  fadeTo($player.defaultVolume = clip01(v));
-  $volume.value = Math.round(10 * $player.defaultVolume);
+  fadeTo($player.defaultVolume = clip01(v/100));
+  $volume.value = Math.round(100 * $player.defaultVolume);
 };
-$volume.addEventListener("input", ()=> updateVolume((+$volume.value) / 10));
-bind("Numpad8", ()=> updateVolume((+$volume.value + 1) / 10));
-bind("Numpad2", ()=> updateVolume((+$volume.value - 1) / 10));
+$volume.addEventListener("input", ()=> updateVolume(+$volume.value));
+$volume.addEventListener("wheel", e => {
+  stopEvent(e);
+  updateVolume(e.deltaY > 0 ? +$volume.value - $volumeStep
+             : e.deltaY < 0 ? +$volume.value + $volumeStep
+             : e.deltaX > 0 ? +$volume.value + 2 * $volumeStep
+             : e.deltaX < 0 ? +$volume.value - 2 * $volumeStep
+             : U); });
+bind("Numpad8", ()=> updateVolume(+$volume.value + $volumeStep));
+bind("Numpad2", ()=> updateVolume(+$volume.value - $volumeStep));
+
+$("control-panel").addEventListener("wheel", e => trackSkip( //!!!
+    e.deltaY > 0 ? -0.5
+  : e.deltaY < 0 ? +0.5
+  : e.deltaX > 0 ? +1
+  : e.deltaX < 0 ? -1
+  : U)(e));
 
 // ---- time display ----------------------------------------------------------
 
@@ -735,6 +749,7 @@ const $search = $("search");
 const showSearch = (origin = search.origin) => {
   if (!origin) origin = getInfo($.selected);
   let n0 = search.origin = origin;
+  $search.classList.remove("found", "not-found");
   if (!search.ok) return removeSearch();
   if (n0.type != "audio") n0 = n0.nexta;
   const ok = search.ok, fst = all.nexta;
@@ -746,7 +761,7 @@ const showSearch = (origin = search.origin) => {
     if (r) results.push(n);
   } while ((n = n.nexta) != n0);
   later.forEach(x => results.push(x));
-  $search.classList.toggle("not-found", results.length == 0);
+  $search.classList.add(results.length > 0 ? "found" : "not-found");
   search.results = results;
   search.cur = (results.length - later.length) % results.length;
   showCurSearch();
@@ -758,7 +773,8 @@ const showSearch = (origin = search.origin) => {
 //   if (len == 0) return;
 //   const cur = search.results.indexOf(getInfo($.player));
 //   if (cur >= 0) return search.results[mod(cur + (down ? +1 : -1), len)].elt;
-//   if (search.origin && search.origin.type == "audio") return search.origin.elt;
+//   if (search.origin && search.origin.type == "audio")
+//     return search.origin.elt;
 //   return search.results[0].elt;
 // };
 
@@ -851,7 +867,8 @@ const startVisualizer = ()=> {
   const rootS = document.documentElement.style;
   vCanvas.addEventListener("click", ()=> mode = (mode+1) % 4);
   const cCtx = vCanvas.getContext("2d");
-  startVisualizer.clear = ()=> cCtx.clearRect(0, 0, vCanvas.width, vCanvas.height);
+  startVisualizer.clear = ()=>
+    cCtx.clearRect(0, 0, vCanvas.width, vCanvas.height);
   const draw = ()=> {
     requestAnimationFrame(draw);
     if ($player.paused || $player.pausing) return;
