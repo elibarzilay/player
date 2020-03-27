@@ -542,9 +542,10 @@ addDragEvents($main, (e, d) => plistDelete(d), e => !isMainItem($drag));
 
 // ---- toggles ---------------------------------------------------------------
 
-const mkToggle = (id, cb = null) => {
+const mkToggle = (id, cb = null, h = null) => {
   const elt = $(id);
-  const toggle = ()=> {
+  const toggle = e => {
+    if (h && h(e)) return;
     elt.classList.toggle("on", (toggle.on = !toggle.on));
     if (cb) cb(toggle.on);
   };
@@ -556,6 +557,18 @@ const loopMode = mkToggle("loop");
 const bigvizMode = mkToggle("bigviz", on => {
   $main.classList.toggle("volumebg", on);
   $plist.classList.toggle("volumebg", on);
+}, e => {
+  if (!e.shiftKey) return false;
+  const win = window.open(
+    "", "_blank",
+    "resizable=1,scrollbars=0,menubar=0,toolbar=0,location=0,status=0");
+  const body = win.document.body;
+  body.parentElement.style.background = "#000";
+  const setbg = c => body.style.background = c;
+  setbg("#000");
+  startVisualizer.addVizListener(setbg);
+  win.addEventListener("unload", ()=> startVisualizer.delVizListener(setbg));
+  return true;
 });
 
 // ---- player interactions ---------------------------------------------------
@@ -864,7 +877,11 @@ const startVisualizer = ()=> {
   analyzer.getByteTimeDomainData(aData);
   const vCanvas = document.getElementById("visualization");
   let mode = 3;
+  const vizListeners = new Set();
+  startVisualizer.addVizListener = l => vizListeners.add(l);
+  startVisualizer.delVizListener = l => vizListeners.delete(l);
   const rootS = document.documentElement.style;
+  vizListeners.add(c => rootS.setProperty("--volume", c));
   vCanvas.addEventListener("click", ()=> mode = (mode+1) % 4);
   const cCtx = vCanvas.getContext("2d");
   startVisualizer.clear = ()=>
@@ -901,9 +918,9 @@ const startVisualizer = ()=> {
       cCtx.stroke();
       avg2 = clip01(avg2 / bufLen / 64);
     } else avg2 = 0.5;
-    rootS.setProperty(
-      "--volume",
-      `hsl(${Math.round(120*avg2)}deg, 100%, 50%, ${Math.round(100*avg1)}%)`);
+    const color =
+      `hsl(${Math.round(120*avg2)}deg, 100%, 50%, ${Math.round(100*avg1)}%)`;
+    vizListeners.forEach(l => l(color));
   }
   draw();
 };
