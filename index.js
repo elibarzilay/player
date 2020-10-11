@@ -40,6 +40,11 @@ const shuffle = xs => {
   return xs;
 };
 
+const wheelToN = (e, n1, n2, dflt) =>
+  (e.deltaY > 0 ? +n1 : e.deltaY < 0 ? -n1
+   : e.deltaX > 0 ? +n2 : e.deltaX < 0 ? -n2
+   : dflt);
+
 ["selected", "player", "altitem", "dragitem"].forEach(prop => {
   let item; Object.defineProperty($, prop, {
     get: ()=> item,
@@ -618,28 +623,21 @@ const percentJump = e => isFinite($player.duration)
 bind("0123456789".split("").map(d => "Digit"+d), percentJump);
 
 $player.defaultVolume = 1; // made up field
-const $volume = $("volume"), $volumeStep = +$volume.step; $volume.value = 100;
+const $volume = $("volume"), $volumeMax = +$volume.max;
+$volume.value = $volumeMax;
 const updateVolume = v => {
-  fadeTo($player.defaultVolume = clip01(v/100));
-  $volume.value = Math.round(100 * $player.defaultVolume);
+  fadeTo($player.defaultVolume = clip01(v / $volumeMax));
+  $volume.value = Math.round($volumeMax * $player.defaultVolume);
 };
 $volume.addEventListener("input", ()=> updateVolume(+$volume.value));
 $volume.addEventListener("wheel", e => {
-  stopEvent(e);
-  updateVolume(e.deltaY > 0 ? +$volume.value - $volumeStep
-             : e.deltaY < 0 ? +$volume.value + $volumeStep
-             : e.deltaX > 0 ? +$volume.value + 2 * $volumeStep
-             : e.deltaX < 0 ? +$volume.value - 2 * $volumeStep
-             : U); });
-bind("Numpad8", ()=> updateVolume(+$volume.value + $volumeStep));
-bind("Numpad2", ()=> updateVolume(+$volume.value - $volumeStep));
+  stopEvent(e); updateVolume(+$volume.value + wheelToN(e, -1, 2, 0)); });
+bind("Numpad8", ()=> updateVolume(+$volume.value + 1));
+bind("Numpad2", ()=> updateVolume(+$volume.value - 1));
 
-$("control-panel").addEventListener("wheel", e => trackSkip( //!!!
-    e.deltaY > 0 ? -0.5
-  : e.deltaY < 0 ? +0.5
-  : e.deltaX > 0 ? +1
-  : e.deltaX < 0 ? -1
-  : U)(e));
+// mouse wheel for convenient song navigation
+$("control-panel").addEventListener("wheel", e =>
+  trackSkip(wheelToN(e, 0.5, 1, U))(e));
 
 // ---- time display ----------------------------------------------------------
 
