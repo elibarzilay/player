@@ -88,19 +88,24 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
 
 #bigviz { background: var(--volume); border-radius: 15%; }
 
-#volume {
-  width: 8ex; height: 1ex; margin: 0 -3ex; transform: rotate(-90deg);
-  position: relative; top: -2.8ex; background: #0000; -webkit-appearance: none;
+#sliders { position: absolute; top: 12px; }
+.slider { height: 2ex; background: #0000; -webkit-appearance: none; }
+#volume { width: 8ex;  margin: 1ex -3ex; transform: rotate(-90deg);
+          vertical-align: top; }
+#rate   { width: 12ex; margin: -3ex 0;
+          vertical-align: text-bottom; }
+.slider:focus { outline: none; }
+.slider::-webkit-slider-runnable-track {
+  background: #44cc; height: 4px; border-radius: 25px;
 }
-#volume:focus { outline: none; }
-#volume::-webkit-slider-runnable-track {
-  background: #4448; height: 4px; border-radius: 25px;
+.slider::-webkit-slider-thumb {
+  background: #cc8c; height: 12px; width: 12px; border-radius: 6px;
+  margin-top: -4px; -webkit-appearance: none;
 }
-#volume::-webkit-slider-thumb {
-  background: #822c; height: 12px; width: 12px; border-radius: 6px;
-  margin-top: -3.75px; -webkit-appearance: none;
-}
-#volume:focus::-webkit-slider-runnable-track { background: #444c; }
+.slider:focus::-webkit-slider-runnable-track,
+.slider:hover::-webkit-slider-runnable-track { background: #44ff; }
+.slider:focus::-webkit-slider-thumb,
+.slider:hover::-webkit-slider-thumb { background: #ff8f; }
 
 #playerbuttons { text-align: center; cursor: default; }
 #playerbuttons > div {

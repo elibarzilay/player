@@ -626,14 +626,30 @@ $player.defaultVolume = 1; // made up field
 const $volume = $("volume"), $volumeMax = +$volume.max;
 $volume.value = $volumeMax;
 const updateVolume = v => {
-  fadeTo($player.defaultVolume = clip01(v / $volumeMax));
-  $volume.value = Math.round($volumeMax * $player.defaultVolume);
+  const vol = clip01(v / $volumeMax);
+  fadeTo($player.defaultVolume = vol);
+  $volume.value = Math.round($volumeMax * vol);
 };
 $volume.addEventListener("input", ()=> updateVolume(+$volume.value));
 $volume.addEventListener("wheel", e => {
   stopEvent(e); updateVolume(+$volume.value + wheelToN(e, -1, 2, 0)); });
 bind("Numpad8", ()=> updateVolume(+$volume.value + 1));
 bind("Numpad2", ()=> updateVolume(+$volume.value - 1));
+
+$player.defaultPlaybackRate = 1;
+const $rate = $("rate"), $rateMax = +$rate.max;
+$rate.value = $rateMax / 2;
+const updateRate = r => {
+  const rate = clip01(r / $rateMax) + 0.5;
+  $player.preservesPitch = false;
+  $player.defaultPlaybackRate = $player.playbackRate = rate;
+  $rate.value = Math.round($rateMax * (rate - 0.5));
+};
+$rate.addEventListener("input", ()=> updateRate(+$rate.value));
+$rate.addEventListener("wheel", e => {
+  stopEvent(e); updateRate(+$rate.value + wheelToN(e, -1, 2, 0)); });
+bind("Numpad9", ()=> updateRate(+$rate.value + 1));
+bind("Numpad7", ()=> updateRate(+$rate.value - 1));
 
 // mouse wheel for convenient song navigation
 $("control-panel").addEventListener("wheel", e =>
