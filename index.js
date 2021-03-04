@@ -97,23 +97,23 @@ const addLazyInfoProps = info => {
 };
 
 const setAllExtras = ()=> {
-  let first = null, last = null, border = [all], nexts = [all];
+  let first = null, last = null, firsts = [all], lasts = [all];
   const loop = parent => parent.children.forEach(child => {
     child.parent = parent;
-    if (last) child.preva = last; else border.push(child);
+    if (last) child.preva = last; else firsts.push(child);
     if (child.type == "audio") {
       if (!first) first = child;
-      nexts.forEach(n => n.nexta = child); nexts.length = 0;
+      lasts.forEach(n => n.nexta = child); lasts.length = 0;
       last = child;
     }
-    nexts.push(child);
+    lasts.push(child);
     if (child.children) loop(child);
     addLazyInfoProps(child);
   });
   loop(all);
   addLazyInfoProps(all);
-  nexts .forEach(n => n.nexta = first); nexts .length = 0;
-  border.forEach(n => n.preva = last ); border.length = 0;
+  lasts .forEach(n => n.nexta = first); lasts .length = 0;
+  firsts.forEach(n => n.preva = last ); firsts.length = 0;
 };
 
 // ---- rendering -------------------------------------------------------------
