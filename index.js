@@ -1015,20 +1015,26 @@ const visualizer = (()=>{
   const r = {};
   const aCtx = new AudioContext();
   const pSrc = aCtx.createMediaElementSource($player);
-  const analyzer = aCtx.createAnalyser();
-  analyzer.smoothingTimeConstant = analyzerSmoothing;
-  analyzer.fftSize = 2 * analyzerBins;
+  const splitter = aCtx.createChannelSplitter(2);
   pSrc.connect(aCtx.destination);
-  pSrc.connect(analyzer);
-  const bufLen = analyzer.frequencyBinCount, aData = new Uint8Array(bufLen);
-  const vCanvas = $("visualization");
+  pSrc.connect(splitter);
+  const SIDES = [0, 1];
+  const analyzers = SIDES.map(i => {
+    const a = aCtx.createAnalyser();
+    a.smoothingTimeConstant = analyzerSmoothing;
+    a.fftSize = 2 * analyzerBins;
+    splitter.connect(a, i);
+    return a;
+  });
+  const bufLen = analyzers[0].frequencyBinCount, aData = new Uint8Array(bufLen);
+  const vCanvas = $("visualization"); vCanvas.width *= 4;
   let mode = 3;
   const vizListeners = new Set();
   r.addListener = l => vizListeners.add(l);
   r.delListener = l => vizListeners.delete(l);
   const rootS = document.documentElement.style;
   vizListeners.add(c => rootS.setProperty("--volume", c));
-  vCanvas.addEventListener("click", ()=> mode = (mode+1) % 4);
+  vCanvas.addEventListener("click", bigvizMode);
   const cCtx = vCanvas.getContext("2d");
   const clear = r.clear = ()=>
     cCtx.clearRect(0, 0, vCanvas.width, vCanvas.height);
@@ -1038,32 +1044,35 @@ const visualizer = (()=>{
     updateTimes();
     clear();
     if (!mode) return;
-    const sliceWidth = vCanvas.width / bufLen;
+    const w = vCanvas.width / bufLen / 2;
     let avg1 = 0, avg2 = 0;
     if (mode & 1) {
-      const sliceWidth1 = 1.25 * sliceWidth; // upper part is empty
-      analyzer.getByteFrequencyData(aData);
       cCtx.fillStyle = analyzerBinsColor;
-      for (let i = 0, x = 0; i < bufLen; i++, x += sliceWidth1) {
-        avg1 += aData[i];
-        const barHeight = aData[i]/2 + 1;
-        cCtx.fillRect(x, vCanvas.height/2 - barHeight/2,
-                      sliceWidth1 + 1, barHeight);
+      for (const side of SIDES) {
+        const d = side === 0 ? -1 : +1;
+        analyzers[side].getByteFrequencyData(aData);
+        for (let i = 0, x = vCanvas.width / 2; i < bufLen; i++, x += d*w) {
+          avg1 += aData[i];
+          const barHeight = aData[i]/2 + 1;
+          cCtx.fillRect(x, vCanvas.height/2 - barHeight/2, d*(w+1), barHeight);
+        }
       }
-      avg1 = clip01(avg1 / bufLen / 128);
+      avg1 = clip01(avg1 / bufLen / 2 / 128);
     } else avg1 = 0.5;
     if (mode & 2) {
-      analyzer.getByteTimeDomainData(aData);
       cCtx.lineWidth = 2; cCtx.strokeStyle = analyzerWaveColor;
-      cCtx.beginPath();
-      for (let i = 0, x = 0; i < bufLen; i++, x += sliceWidth) {
-        avg2 += Math.abs(128 - aData[i]);
-        const y = aData[i] * vCanvas.height / 256;
-        if (i == 0) cCtx.moveTo(x, y); else cCtx.lineTo(x, y);
+      for (const side of SIDES) {
+        const d = side === 0 ? -1 : +1;
+        analyzers[side].getByteTimeDomainData(aData);
+        cCtx.beginPath();
+        for (let i = 0, x = vCanvas.width / 2; i < bufLen; i++, x += d*w) {
+          avg2 += Math.abs(128 - aData[i]);
+          const y = aData[i] * vCanvas.height / 256;
+          cCtx.lineTo(x, y);
+        }
+        cCtx.stroke();
       }
-      cCtx.lineTo(vCanvas.width, vCanvas.height / 2);
-      cCtx.stroke();
-      avg2 = clip01(avg2 / bufLen / 64);
+      avg2 = clip01(avg2 / bufLen / 2 / 64);
     } else avg2 = 0.5;
     const color =
       `hsl(${Math.round(120*avg2)}deg, 100%, 50%, ${Math.round(100*avg1)}%)`;
