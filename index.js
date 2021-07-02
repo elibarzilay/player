@@ -560,6 +560,8 @@ const mkToggle = (id, cb = null, h = null) => {
   return toggle;
 };
 const loopMode = mkToggle("loop");
+const fftvizMode = mkToggle("fftviz");
+const wavvizMode = mkToggle("wavviz");
 const bigvizMode = mkToggle("bigviz", on =>
   $("visualization").classList.toggle("fullsize", on));
 const flashyMode = mkToggle("flashy", on => {
@@ -1028,7 +1030,6 @@ const visualizer = (()=>{
   });
   const bufLen = analyzers[0].frequencyBinCount, aData = new Uint8Array(bufLen);
   const vCanvas = $("visualization"); vCanvas.width *= 4;
-  let mode = 3;
   const vizListeners = new Set();
   r.addListener = l => vizListeners.add(l);
   r.delListener = l => vizListeners.delete(l);
@@ -1043,10 +1044,9 @@ const visualizer = (()=>{
     if ($player.paused || $player.pausing) return;
     updateTimes();
     clear();
-    if (!mode) return;
     const w = vCanvas.width / bufLen / 2;
     let avg1 = 0, avg2 = 0;
-    if (mode & 1) {
+    if (fftvizMode.on) {
       cCtx.fillStyle = analyzerBinsColor;
       for (const side of SIDES) {
         const d = side === 0 ? -1 : +1;
@@ -1059,7 +1059,7 @@ const visualizer = (()=>{
       }
       avg1 = clip01(avg1 / bufLen / 2 / 128);
     } else avg1 = 0.5;
-    if (mode & 2) {
+    if (wavvizMode.on) {
       cCtx.lineWidth = 2; cCtx.strokeStyle = analyzerWaveColor;
       for (const side of SIDES) {
         const d = side === 0 ? -1 : +1;

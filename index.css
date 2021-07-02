@@ -90,7 +90,10 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
           font-size: 150%; }
 .toggle.on { filter: brightness(1); }
 
-#bigviz { position: absolute; top: 0; right: 4px; font-size: 75%; }
+#viz-toggles { position: absolute; top: -4px; right: 8px; opacity: 0.25; }
+#viz-toggles > div { font-size: 75%; width: 1.25ex; display: inline-block; }
+#viz-toggles > div:after    { content: "⊙"; }
+#viz-toggles > div.on:after { content: "⦿"; }
 
 #flashy { background: var(--volume); border-radius: 15%; }
 
