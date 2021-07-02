@@ -560,7 +560,9 @@ const mkToggle = (id, cb = null, h = null) => {
   return toggle;
 };
 const loopMode = mkToggle("loop");
-const bigvizMode = mkToggle("bigviz", on => {
+const bigvizMode = mkToggle("bigviz", on =>
+  $("visualization").classList.toggle("fullsize", on));
+const flashyMode = mkToggle("flashy", on => {
   $main.classList.toggle("volumebg", on);
   $plist.classList.toggle("volumebg", on);
 }, e => {
@@ -1019,8 +1021,7 @@ const visualizer = (()=>{
   pSrc.connect(aCtx.destination);
   pSrc.connect(analyzer);
   const bufLen = analyzer.frequencyBinCount, aData = new Uint8Array(bufLen);
-  analyzer.getByteTimeDomainData(aData);
-  const vCanvas = document.getElementById("visualization");
+  const vCanvas = $("visualization");
   let mode = 3;
   const vizListeners = new Set();
   r.addListener = l => vizListeners.add(l);
@@ -1040,13 +1041,14 @@ const visualizer = (()=>{
     const sliceWidth = vCanvas.width / bufLen;
     let avg1 = 0, avg2 = 0;
     if (mode & 1) {
+      const sliceWidth1 = 1.25 * sliceWidth; // upper part is empty
       analyzer.getByteFrequencyData(aData);
       cCtx.fillStyle = analyzerBinsColor;
-      for (let i = 0, x = 0; i < bufLen; i++, x += sliceWidth) {
+      for (let i = 0, x = 0; i < bufLen; i++, x += sliceWidth1) {
         avg1 += aData[i];
         const barHeight = aData[i]/2 + 1;
         cCtx.fillRect(x, vCanvas.height/2 - barHeight/2,
-                      sliceWidth+1, barHeight);
+                      sliceWidth1 + 1, barHeight);
       }
       avg1 = clip01(avg1 / bufLen / 128);
     } else avg1 = 0.5;
