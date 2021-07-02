@@ -32,14 +32,7 @@ gen_image() {
          -hide_banner -loglevel warning \
          -f data "$tmpdata"
   gnuplot -e "$plot" < "$tmpdata"; rm "$tmpdata"
-
-  if [[ ! -e "$image" ]] \
-     || ! diff -q "$tmpimage" "$image" 2>&1 > /dev/null; then
-    mv "$tmpimage" "$image"
-  else
-    rm "$tmpimage"
-  fi
-
+  mv "$tmpimage" "$image"
 }
 
 fmt="format_tags=title,track,album,artist,genre,date : format=duration"
