@@ -92,9 +92,9 @@ const addLazyInfoProps = info => {
   if (info.type != "audio") return;
   const txt = x => x ? " " + x.replaceAll(/\//g, " ") : "";
   addLazyProp(info, "search", ()=>
-    (info.path + txt(info.title) + txt(info.album) + txt(info.track)
+    (info.path + "/" + txt(info.title) + txt(info.album) + txt(info.track)
      + txt(info.date) + txt(info.artist))
-    .replaceAll(/[ _-]+/g, " ").toLowerCase());
+    .replaceAll(/[ _]+/g, " ").toLowerCase());
 };
 
 const setAllExtras = ()=> {
@@ -351,8 +351,7 @@ $("times").addEventListener("click", ()=> timeRemaining = !timeRemaining);
 const stopEvent = e => { e.preventDefault(); e.stopImmediatePropagation(); };
 
 const selectNext = (elt = $.selected, n = 0, opts) => {
-  // debugger;
-  const move = opts && opts.move && (n>0 ? "down" : "up");
+  const move = (opts?.move ?? false) && (n>0 ? "down" : "up");
   if (!elt) return;
   if (move && isMainItem(elt)) return;
   let result = null;
@@ -362,7 +361,12 @@ const selectNext = (elt = $.selected, n = 0, opts) => {
     if (n > 0) n--; else n++;
   }
   if (!result) return;
-  if (!move) return result.focus();
+  if (!move) {
+    const inSearch = document.activeElement === $search;
+    result.focus();
+    if (inSearch) $search.focus();
+    return;
+  }
   const swap = result == result.parentElement.firstElementChild ? result
              : result == result.parentElement.lastElementChild  ? null
              : move == "up" ? result : result.nextElementSibling;
@@ -777,12 +781,12 @@ $wave.addEventListener("mousedown", e => {
 // ---- search function -------------------------------------------------------
 
 const mkSearcher = (str, {sep = "/", pfxSep = true, sfxSep = false} = {}) => {
-  const escape = str => str.replace(/[.*+-?^${}()|\[\]\\]/g, "\\$&");
+  const escape = str => str.replace(/[.*+?^${}()|\[\]\\]/g, "\\$&");
   const seprx = escape(sep);
   const word2rx = str =>
-    RegExp(str.split("").join(`[^ ${seprx}]*`), "iug");
+    RegExp(str.split("").map(escape).join(`[^ ${seprx}]*`), "iug");
   const words = str =>
-    str.split(/ +/).map(word2rx);
+    str.split(/ +/).filter(s => s.length).map(word2rx);
   const seps = str =>
     str.trim().split(sep).map(s => words(s.trim()));
   str = str.trim();
@@ -794,6 +798,7 @@ const mkSearcher = (str, {sep = "/", pfxSep = true, sfxSep = false} = {}) => {
   if (sfxSep) str = str.slice(0,-1);
   const rxss = str.length ? seps(str) : [];
   const last = rxss[rxss.length-1];
+  if (!last.length) rxss.length--;
   const rxsep = RegExp(seprx, "iug");
   return inp => {
     let pos = 0;
@@ -803,12 +808,14 @@ const mkSearcher = (str, {sep = "/", pfxSep = true, sfxSep = false} = {}) => {
       else pos = pfxSep.lastIndex;
     }
     for (const rxs of rxss) {
-      const poss = rxs.map(rx =>
-        (rx.lastIndex = pos, (rx.exec(inp) ? rx.lastIndex : -1)));
-      if (poss.some(p => p < 0)) return false;
-      pos = Math.max(...poss);
-      if (pos < 0) return false;
-      if (rxs === last) continue;
+      if (rxs.length) {
+        const poss = rxs.map(rx =>
+          (rx.lastIndex = pos, (rx.exec(inp) ? rx.lastIndex : -1)));
+        if (poss.some(p => p < 0)) return false;
+        pos = Math.max(...poss);
+        if (pos < 0) return false;
+        if (rxs === last) break;
+      }
       rxsep.lastIndex = pos;
       if (!rxsep.exec(inp)) return false;
       pos = rxsep.lastIndex;
@@ -895,11 +902,24 @@ const mkSearcher = (str, {sep = "/", pfxSep = true, sfxSep = false} = {}) => {
   t("///foo///bar///");
   search("/foo/bar/");
   t("/foo/bar/");
+  f("/bar/foo/");
   t("/foo/bar/x");
   t("/foo/bar/x/x");
   f("/foo/bar");
+  search("/foo//bar");
+  f("/foo/bar");
+  f("/foo/bar/");
+  t("/foo//bar");
+  t("/foo//bar/");
+  t("/foo///bar");
+  t("/foo///bar/");
+  t("/foo/x/bar");
+  t("/foo/x/bar/");
+  t("/foo/x/x/bar");
+  t("/foo/x/x/bar/");
   if (fails.length)
-    console.error(`${fails.length}/${n} tests failed: ${fails.join(", ")}`);
+    console.error([`${fails.length}/${n} tests failed:`, ...fails]
+                  .join("\n  "));
   else
     console.log(`${n} tests passed.`);
 })();
@@ -992,8 +1012,8 @@ search.results = [];
 
 const searchKey = e => {
   const {key, code, shiftKey: shift, ctrlKey: ctrl} = e;
-  if (key == "Enter"
-      || ((shift || ctrl) && (key == " " || code.startsWith("Numpad")))
+  if (key === "Enter" || code === "Backslash"
+      || ((shift || ctrl) && (key === " " || code.startsWith("Numpad")))
       || (ctrl            && code.startsWith("Digit")))
     return;
   e.stopImmediatePropagation();
