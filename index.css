@@ -99,8 +99,9 @@ code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
 
 #sliders { position: absolute; top: 12px; }
 .slider { height: 2ex; background: #0000; -webkit-appearance: none; }
-#volume { width: 8ex;  margin: 1ex -3ex; transform: rotate(-90deg);
-          vertical-align: top; }
+#volume, #gain {
+  width: 8ex;  margin: 1ex -3ex; transform: rotate(-90deg); vertical-align: top;
+}
 #rate   { width: 12ex; margin: -3ex 0;
           vertical-align: text-bottom; }
 .slider:focus { outline: none; }

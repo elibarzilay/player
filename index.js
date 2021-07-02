@@ -22,6 +22,7 @@ const isFinite = Number.isFinite;
 const U = undefined;
 
 const mod = (n, m) => { const r = n % m; return r < 0 ? r + m : r; };
+const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
 const clipRange = (lo, x, hi) => Math.max(Math.min(x,hi), lo);
 const clip01 = x => clipRange(0, x, 1);
 
@@ -642,12 +643,18 @@ const updateVolume = v => {
   const vol = clip01(v / $volumeMax);
   fadeTo($player.defaultVolume = vol);
   $volume.value = Math.round($volumeMax * vol);
+  $volume.title = `${$rate.title.replace(/ *=.*/, "")} = ${
+                       Math.round(vol*100)}%`;
 };
 $volume.addEventListener("input", ()=> updateVolume(+$volume.value));
+$volume.addEventListener("mousedown", e =>
+  e.button === 1 && updateVolume($volumeMax));
 $volume.addEventListener("wheel", e => {
   stopEvent(e); updateVolume(+$volume.value + wheelToN(e, -1, 2, 0)); });
-bind("Numpad8", ()=> updateVolume(+$volume.value + 1));
-bind("Numpad2", ()=> updateVolume(+$volume.value - 1));
+bind("Numpad8", e => e.ctrlKey
+  ? updateGain(+$gain.value + 0.25) : updateVolume(+$volume.value + 1));
+bind("Numpad2", e => e.ctrlKey
+  ? updateGain(+$gain.value - 0.25) : updateVolume(+$volume.value - 1));
 
 $player.defaultPlaybackRate = 1;
 const $rate = $("rate"), $rateMax = +$rate.max;
@@ -657,12 +664,31 @@ const updateRate = r => {
   $player.preservesPitch = false;
   $player.defaultPlaybackRate = $player.playbackRate = rate;
   $rate.value = Math.round($rateMax * (rate - 0.5));
+  const S = 8, n = Math.round(rate*S), d = gcd(n, S);
+  const frac = d === S ? `${n/d}` : `${n/d}/${S/d}`;
+  $rate.title = `${$rate.title.replace(/ *=.*/, "")} = ${frac}`;
 };
 $rate.addEventListener("input", ()=> updateRate(+$rate.value));
+$rate.addEventListener("mousedown", e =>
+  e.button === 1 && updateRate($rateMax/2));
 $rate.addEventListener("wheel", e => {
   stopEvent(e); updateRate(+$rate.value + wheelToN(e, -1, 2, 0)); });
-bind("Numpad9", ()=> updateRate(+$rate.value + 1));
-bind("Numpad7", ()=> updateRate(+$rate.value - 1));
+bind(["Numpad9", ">", "]"], ()=> updateRate(+$rate.value + 1));
+bind(["Numpad7", "<", "["], ()=> updateRate(+$rate.value - 1));
+bind(["="], ()=> updateRate($rateMax/2));
+
+const $gain = $("gain"), $gainMax = +$gain.max;
+$gain.value = 1;
+const updateGain = g => {
+  const gain = Math.round(clip01(g / $gainMax) * 4 * $gainMax) / 4;
+  audio.setGain(gain);
+  $gain.value = gain;
+  $gain.title = `${$gain.title.replace(/ *=.*/, "")} = ${gain}`;
+};
+$gain.addEventListener("input", ()=> updateGain(+$gain.value));
+$gain.addEventListener("mousedown", e => e.button === 1 && updateGain(1));
+$gain.addEventListener("wheel", e => {
+  stopEvent(e); updateGain(+$gain.value + wheelToN(e, -0.25, 1, 0)); });
 
 // mouse wheel for convenient song navigation
 $("control-panel").addEventListener("wheel", e =>
@@ -1035,77 +1061,98 @@ $search.addEventListener("blur",  search);
 $search.addEventListener("input", search);
 $search.addEventListener("keydown", searchKey);
 
-// ---- visualizations --------------------------------------------------------
+// ---- audio wiring ----------------------------------------------------------
 
-const visualizer = (()=>{
-  const r = {};
-  const aCtx = new AudioContext();
-  const pSrc = aCtx.createMediaElementSource($player);
-  const splitter = aCtx.createChannelSplitter(2);
-  pSrc.connect(aCtx.destination);
-  pSrc.connect(splitter);
-  const SIDES = [0, 1];
+const SIDES = [0, 1];
+const audio = (()=>{
+  const c = new AudioContext();
+  const src = c.createMediaElementSource($player);
+  const splitter = c.createChannelSplitter(2);
+  src.connect(c.destination);
+  src.connect(splitter);
   const analyzers = SIDES.map(i => {
-    const a = aCtx.createAnalyser();
+    const a = c.createAnalyser();
     a.smoothingTimeConstant = analyzerSmoothing;
     a.fftSize = 2 * analyzerBins;
     splitter.connect(a, i);
     return a;
   });
+  const gain = c.createGain();
+  const setGain = g => {
+    const prev = gain.gain.value;
+    gain.gain.value = g;
+    if ((prev === 1) === (g === 1)) return;
+    if (g !== 1) { // connect
+      src.disconnect(c.destination);
+      src.connect(gain);
+      gain.connect(c.destination);
+    } else { // disconnect
+      src.disconnect(gain);
+      src.connect(c.destination);
+      gain.disconnect(c.destination);
+    }
+  };
+  return { analyzers, setGain };
+})();
+
+// ---- visualizations --------------------------------------------------------
+
+const visualizer = (()=>{
+  const r = {};
+  const analyzers = audio.analyzers;
   const bufLen = analyzers[0].frequencyBinCount, aData = new Uint8Array(bufLen);
-  const vCanvas = $("visualization");
+  const canvas = $("visualization");
   const vizListeners = new Set();
   r.addListener = l => vizListeners.add(l);
   r.delListener = l => vizListeners.delete(l);
   const rootS = document.documentElement.style;
   vizListeners.add(c => rootS.setProperty("--volume", c));
-  vCanvas.addEventListener("click", bigvizMode);
-  const cCtx = vCanvas.getContext("2d");
-  const clear = r.clear = ()=>
-    cCtx.clearRect(0, 0, vCanvas.width, vCanvas.height);
+  canvas.addEventListener("click", bigvizMode);
+  const c = canvas.getContext("2d");
+  const clear = r.clear = ()=> c.clearRect(0, 0, canvas.width, canvas.height);
   const draw = ()=> {
-    vCanvas.width = vCanvas.clientWidth; vCanvas.height = vCanvas.clientHeight;
+    canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight;
     requestAnimationFrame(draw);
     if ($player.paused || $player.pausing) return;
     updateTimes();
     clear();
-    const w = vCanvas.width / bufLen / 2;
+    const w = canvas.width / bufLen / 2;
     let avg1 = 0, avg2 = 0;
-    if (fftvizMode.on) {
+    if (!fftvizMode.on) avg1 = 0.5; else {
       const [c1, c2] = analyzerBinsColors[bigvizMode.on ? 1 : 0];
       for (const side of SIDES) {
         const d = 1.25 * (side === 0 ? -1 : +1); // wider since highs are 0
         analyzers[side].getByteFrequencyData(aData);
-        for (let i = 0, x = vCanvas.width / 2; i < bufLen; i++, x += d*w) {
+        for (let i = 0, x = canvas.width / 2; i < bufLen; i++, x += d*w) {
           avg1 += aData[i];
           const rx = Math.round(x), rw = Math.round(d*w);
-          const barHeight = aData[i] * vCanvas.height / 256;
-          cCtx.fillStyle = c1;
-          cCtx.fillRect(rx, vCanvas.height/2 - barHeight/2, rw, barHeight);
+          const barHeight = aData[i] * canvas.height / 256;
+          c.fillStyle = c1;
+          c.fillRect(rx, canvas.height/2 - barHeight/2, rw, barHeight);
           const inner = barHeight/4 - 10;
           if (inner > 0) {
-            cCtx.fillStyle = c2;
-            cCtx.fillRect(rx, vCanvas.height/2 - inner, rw, 2*inner);
+            c.fillStyle = c2;
+            c.fillRect(rx, canvas.height/2 - inner, rw, 2*inner);
           }
         }
       }
       avg1 = clip01(avg1 / bufLen / 2 / 128);
-    } else avg1 = 0.5;
-    if (wavvizMode.on) {
-      cCtx.lineWidth = 2; cCtx.strokeStyle = analyzerWaveColor;
+    }
+    if (!wavvizMode.on) avg2 = 0.5; else {
+      c.lineWidth = 2; c.strokeStyle = analyzerWaveColor;
       for (const side of SIDES) {
         const d = side === 0 ? -1 : +1;
         analyzers[side].getByteTimeDomainData(aData);
-        cCtx.beginPath();
-        for (let i = 0, x = vCanvas.width / 2; i < bufLen; i++, x += d*w) {
+        c.beginPath();
+        for (let i = 0, x = canvas.width / 2; i < bufLen; i++, x += d*w) {
           avg2 += Math.abs(128 - aData[i]);
-          const y = aData[i] * vCanvas.height / 256;
-          cCtx.lineTo(x, y);
+          const y = aData[i] * canvas.height / 256;
+          c.lineTo(x, y);
         }
-        cCtx.stroke();
+        c.stroke();
       }
       avg2 = clip01(avg2 / bufLen / 2 / 64);
-    } else avg2 = 0.5;
+    }
     const color =
       `hsl(${Math.round(120*avg2)}deg, 100%, 50%, ${Math.round(100*avg1)}%)`;
     vizListeners.forEach(l => l(color));
