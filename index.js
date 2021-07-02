@@ -175,7 +175,7 @@ const play = (elt = $.selected) => {
     $player.volume = $player.defaultVolume;
     if (!elt) return playerStop();
     updateDisplays(path);
-    playerPlay().then(startVisualizer).catch(e => {
+    playerPlay().catch(e => {
       if (e.code != e.ABORT_ERR) throw e; });
     setBackgroundImageLoop(imageDelayTime);
   }
@@ -313,7 +313,7 @@ const updateDisplays = (src = $player.path) => {
     !src ? reddishPNG : "/images" + src.replace(/[.][^.]+$/, ".png");
   updateTimes();
   updateTrackInfo();
-  if (!src && startVisualizer.clear) startVisualizer.clear();
+  if (!src) visualizer.clear();
 };
 
 // ---- navigation ------------------------------------------------------------
@@ -572,8 +572,8 @@ const bigvizMode = mkToggle("bigviz", on => {
   body.parentElement.style.background = "#000";
   const setbg = c => body.style.background = c;
   setbg("#000");
-  startVisualizer.addVizListener(setbg);
-  win.addEventListener("unload", ()=> startVisualizer.delVizListener(setbg));
+  visualizer.addListener(setbg);
+  win.addEventListener("unload", ()=> visualizer.delListener(setbg));
   return true;
 });
 
@@ -1009,33 +1009,33 @@ $search.addEventListener("keydown", searchKey);
 
 // ---- visualizations --------------------------------------------------------
 
-const startVisualizer = ()=> {
-  if (startVisualizer.aCtx) return;
-  const aCtx = startVisualizer.aCtx = new AudioContext();
-  const playerAudio = aCtx.createMediaElementSource($player);
+const visualizer = (()=>{
+  const r = {};
+  const aCtx = new AudioContext();
+  const pSrc = aCtx.createMediaElementSource($player);
   const analyzer = aCtx.createAnalyser();
   analyzer.smoothingTimeConstant = analyzerSmoothing;
   analyzer.fftSize = 2 * analyzerBins;
-  playerAudio.connect(aCtx.destination);
-  playerAudio.connect(analyzer);
+  pSrc.connect(aCtx.destination);
+  pSrc.connect(analyzer);
   const bufLen = analyzer.frequencyBinCount, aData = new Uint8Array(bufLen);
   analyzer.getByteTimeDomainData(aData);
   const vCanvas = document.getElementById("visualization");
   let mode = 3;
   const vizListeners = new Set();
-  startVisualizer.addVizListener = l => vizListeners.add(l);
-  startVisualizer.delVizListener = l => vizListeners.delete(l);
+  r.addListener = l => vizListeners.add(l);
+  r.delListener = l => vizListeners.delete(l);
   const rootS = document.documentElement.style;
   vizListeners.add(c => rootS.setProperty("--volume", c));
   vCanvas.addEventListener("click", ()=> mode = (mode+1) % 4);
   const cCtx = vCanvas.getContext("2d");
-  startVisualizer.clear = ()=>
+  const clear = r.clear = ()=>
     cCtx.clearRect(0, 0, vCanvas.width, vCanvas.height);
   const draw = ()=> {
     requestAnimationFrame(draw);
     if ($player.paused || $player.pausing) return;
     updateTimes();
-    startVisualizer.clear();
+    clear();
     if (!mode) return;
     const sliceWidth = vCanvas.width / bufLen;
     let avg1 = 0, avg2 = 0;
@@ -1066,9 +1066,10 @@ const startVisualizer = ()=> {
     const color =
       `hsl(${Math.round(120*avg2)}deg, 100%, 50%, ${Math.round(100*avg1)}%)`;
     vizListeners.forEach(l => l(color));
-  }
+  };
   draw();
-};
+  return r;
+})();
 
 // ---- initialization --------------------------------------------------------
 

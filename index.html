@@ -1,13 +1,15 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="utf-8">
   <title>Eli Music</title>
   <link rel="stylesheet" type="text/css" href=".player/index.css" media="all">
 </head>
 <body>
   <div id="search-panel">
     <span id="result-number"></span> &nbsp;&nbsp;
-    / <input id="search" type="text" value="" size="20" placeholder="search"> /
+    / <input id="search" type="text" value="" size="20" placeholder="search"
+             spellcheck="false"> /
   </div>
   <div id="control-panel">
     <div id="times"><div id="time">?:??</div><div id="dur">?:??</div></div>
@@ -25,12 +27,12 @@
       <div id="wave"><img id="wave-image"><canvas id="wave-canvas"></div>
     </div>
     <div id="sliders">
-      <input type="range" id="volume" class="slider" max="10">
-      <input type="range" id="rate"   class="slider" max="8">
+      <input type="range" id="volume" class="slider" max="10" title="volume">
+      <input type="range" id="rate"   class="slider" max="8"  title="speed">
     </div>
     <div id="viz-container" class="fill-right"><canvas id="visualization"></div>
     <br>
-    <span id="bigviz" class="toggle off">❊</span>
+    <span id="flashy" class="toggle off" title="flashy">❊</span>
     <img  id="loop"   class="toggle on" height="28" src="fonts/loop.svg">
     <div id="track-info" class="fill-right"><div></div></div>
   </div>
