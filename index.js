@@ -90,10 +90,11 @@ const processData = data => {
 const addLazyInfoProps = info => {
   addLazyProp(info, "elt", ()=> $(info.path));
   if (info.type != "audio") return;
-  const txt = x => x ? " " + x : "";
+  const txt = x => x ? " " + x.replaceAll(/\//g, " ") : "";
   addLazyProp(info, "search", ()=>
     (info.path + txt(info.title) + txt(info.album) + txt(info.track)
-     + txt(info.date) + txt(info.artist)).toLowerCase());
+     + txt(info.date) + txt(info.artist))
+    .replaceAll(/[ _-]+/g, " ").toLowerCase());
 };
 
 const setAllExtras = ()=> {
@@ -769,7 +770,138 @@ $wave.addEventListener("mousedown", e => {
   move(e);
 });
 
-// ---- search ----------------------------------------------------------------
+// ---- search function -------------------------------------------------------
+
+const mkSearcher = (str, {sep = "/", pfxSep = true, sfxSep = false} = {}) => {
+  const escape = str => str.replace(/[.*+-?^${}()|\[\]\\]/g, "\\$&");
+  const seprx = escape(sep);
+  const word2rx = str =>
+    RegExp(str.split("").join(`[^ ${seprx}]*`), "iug");
+  const words = str =>
+    str.split(/ +/).map(word2rx);
+  const seps = str =>
+    str.trim().split(sep).map(s => words(s.trim()));
+  str = str.trim();
+  if (!str.length) return str => true;
+  pfxSep &&= str.startsWith(sep) && RegExp(`^ *${seprx}`, "iug");
+  if (pfxSep) str = str.slice(1);
+  if (!str.length) return str => pfxSep.test(str);
+  sfxSep &&= str.endsWith(sep) && RegExp(`${seprx} *$`, "iug");
+  if (sfxSep) str = str.slice(0,-1);
+  const rxss = str.length ? seps(str) : [];
+  const last = rxss[rxss.length-1];
+  const rxsep = RegExp(seprx, "iug");
+  return inp => {
+    let pos = 0;
+    if (pfxSep) {
+      pfxSep.lastIndex = pos;
+      if (!pfxSep.exec(inp)) return false;
+      else pos = pfxSep.lastIndex;
+    }
+    for (const rxs of rxss) {
+      const poss = rxs.map(rx =>
+        (rx.lastIndex = pos, (rx.exec(inp) ? rx.lastIndex : -1)));
+      if (poss.some(p => p < 0)) return false;
+      pos = Math.max(...poss);
+      if (pos < 0) return false;
+      if (rxs === last) continue;
+      rxsep.lastIndex = pos;
+      if (!rxsep.exec(inp)) return false;
+      pos = rxsep.lastIndex;
+    }
+    if (sfxSep) {
+      sfxSep.lastIndex = pos;
+      if (!sfxSep.exec(inp)) return false;
+    }
+    return true;
+  };
+};
+
+
+/*
+(()=>{
+  let n = 0, sec = "", fails = [], ok = ()=>{};
+  const js = JSON.stringify;
+  const test = res => str =>
+    (n++, !!ok(str) === res || fails.push(
+      `${n} ${sec} > ${res ? "t" : "f"}(${js(str)})`));
+  const t = test(true);
+  const f = test(false);
+  const search = (...xs) => {
+    sec = `search(${xs.map(js).join(", ")})`, ok = mkSearcher(...xs); };
+  search("");
+  t("");
+  t("/");
+  t(" ");
+  t("foo");
+  t("/foo");
+  t("/foo/");
+  search("foo");
+  t("foo");
+  t("/foo");
+  t("foo/");
+  t("/foo/");
+  t("foooo");
+  t("fxoxo");
+  t("fxxxoxxxo");
+  t("xfxoxox");
+  f("oof");
+  search(" foo  bar ");
+  t("foo bar");
+  f("foo");
+  t(" bar foo ");
+  t("barfoo");
+  t("foobar");
+  t("bafoor");
+  t("fobaro");
+  t("fboaor");
+  t("bfaoro");
+  t("bar.foo");
+  f("rab oof");
+  t("foo/bar");
+  t("foo / bar");
+  t("/foo bar");
+  t("bar foo/");
+  t("///bar foo///");
+  t("///bar/foo///");
+  search(" / foo  bar ");
+  f("foo bar");
+  f(" foo bar ");
+  t("/foo bar");
+  t("/ bar foo ");
+  t(" / bar foo ");
+  t("/barfoo");
+  t("/foobar");
+  t("/xbfaorox");
+  t("/bar.foo");
+  f("/rab oof");
+  t("/foo // bar/");
+  search(" / foo  bar / ");
+  f("foo bar");
+  f(" foo bar ");
+  f("/foo bar");
+  f("/foo/bar");
+  t("/foo/bar/");
+  t("/bar/foo/");
+  t("/bar/foo/xxx");
+  t("/bar/foo/x/x/x/");
+  t(" / foo / bar / ");
+  t("/fxoxo/bxaxr/");
+  t("/foo//bar/");
+  t("///foo///bar///");
+  search("/foo/bar/");
+  t("/foo/bar/");
+  t("/foo/bar/x");
+  t("/foo/bar/x/x");
+  f("/foo/bar");
+  if (fails.length)
+    console.error(`${fails.length}/${n} tests failed: ${fails.join(", ")}`);
+  else
+    console.log(`${n} tests passed.`);
+})();
+*/
+
+// ---- search UI -------------------------------------------------------------
 
 const $search = $("search");
 
@@ -783,7 +915,7 @@ const showSearch = (origin = search.origin) => {
   let n = n0, results = [], later;
   do {
     if (n == fst) { later = results; results = []; }
-    const r = ok(n);
+    const r = ok(n.search);
     n.elt.classList.toggle("found", r);
     if (r) results.push(n);
   } while ((n = n.nexta) != n0);
@@ -848,8 +980,7 @@ const search = e => {
   const searchStr = $search.value.toLowerCase().trim().replace(/\s+/g, " ");
   if (search.last == searchStr) return; else search.last = searchStr;
   const searchStrs = searchStr.split(" ");
-  search.ok = searchStr == "" ? null
-            : n => searchStrs.every(s => n.search.includes(s));
+  search.ok = searchStr == "" ? null : mkSearcher(searchStr);
   if (search.timer) clearTimeout(search.timer);
   search.timer = setTimeout(()=> { search.timer = null; showSearch(); }, 250);
 };
