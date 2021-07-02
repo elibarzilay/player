@@ -90,7 +90,8 @@ audio_info() {
 file() {
   local sfx="${1##*.}" type extra=""
   case "$sfx" in
-    ( "mp3" | "ogg" | "wma" ) type="audio" extra=audio_info; gen_image "$1" ;;
+    ( "mp3" | "ogg" | "wma" | \
+      "m4a" ) type="audio" extra=audio_info; gen_image "$1" ;;
     ( "jpg" | "png"         ) type="image" ;;
     ( "mpg"                 ) type="video" ;;
     ( "pdf" | "txt" | "flp" ) type="other" ;;
@@ -110,7 +111,6 @@ dir() {
   owd="$PWD"; cd "$dir"
   pwd 1>&2
   for f in *; do
-    if [[ "$f" = "_"* ]]; then continue; fi
     if ! ((fst)); then printf ',\n%s' "$indent" 1>&5; fi; fst=0
     if [[ -f "$f" ]]; then file "$f"; else dir "$indent" "$f"; fi
   done

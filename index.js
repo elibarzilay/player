@@ -954,13 +954,13 @@ const init = data => {
   updateDisplays("");
 };
 
-fetch("/.player/info", {method: "HEAD"})
+fetch("info", { method: "HEAD" })
   .then(r => localStorage.date == r.headers.get("last-modified")
              && localStorage.all
              ? init(JSON.parse(localStorage.all))
              : (delete localStorage.all,
                 localStorage.date = r.headers.get("last-modified"),
-                fetch("/.player/info")
+                fetch("info")
                   .then(r => r.json())
                   .then(data => init(processData(data)))));
 
