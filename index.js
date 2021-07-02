@@ -10,7 +10,8 @@ const imageDelayTime = 2, imageCycleTime = 60, imageExplicitTime = 120;
 const tickerTime = 60, tickerSwapTime = 1;
 const waveNeedleColor = "#f00a", waveNeedleWidth = 4;
 const analyzerSmoothing = 0.5, analyzerBins = 512;
-const analyzerWaveColor = "#ffcc", analyzerBinsColor = "#844";
+const analyzerWaveColor = "#ffcc";
+const analyzerBinsColors = [["#844", "#a74"], ["#22c", "#ff4"]];
 
 // ---- utils -----------------------------------------------------------------
 
@@ -563,7 +564,7 @@ const mkToggle = (id, cb = null, h = null) => {
   elt.addEventListener("click", toggle);
   return toggle;
 };
-const loopMode = mkToggle("loop");
+const loopMode   = mkToggle("loop");
 const fftvizMode = mkToggle("fftviz");
 const wavvizMode = mkToggle("wavviz");
 const bigvizMode = mkToggle("bigviz", on =>
@@ -572,7 +573,7 @@ const flashyMode = mkToggle("flashy", on => {
   $main.classList.toggle("volumebg", on);
   $plist.classList.toggle("volumebg", on);
 }, e => {
-  if (!e.shiftKey) return false;
+  if (!e?.shiftKey) return false;
   const win = window.open(
     "", "_blank",
     "resizable=1,scrollbars=0,menubar=0,toolbar=0,location=0,status=0");
@@ -602,6 +603,9 @@ bind(["Backspace", "Delete"], e => plistDelete(e.key == "Backspace"));
 bind("+", ()=> expandDir(U, true),   notCtrl);
 bind("-", ()=> expandDir(U, false),  notCtrl);
 bind("*", ()=> expandDir(U, "deep"), notCtrl);
+
+bind("\\", bigvizMode);
+bind("|",  ()=> flashyMode()); // avoid shift opening a window
 
 bind("ArrowUp",   e => selectNext(U, -1, {move: e.ctrlKey}));
 bind("ArrowDown", e => selectNext(U, +1, {move: e.ctrlKey}));
@@ -1049,7 +1053,7 @@ const visualizer = (()=>{
     return a;
   });
   const bufLen = analyzers[0].frequencyBinCount, aData = new Uint8Array(bufLen);
-  const vCanvas = $("visualization"); vCanvas.width *= 4;
+  const vCanvas = $("visualization");
   const vizListeners = new Set();
   r.addListener = l => vizListeners.add(l);
   r.delListener = l => vizListeners.delete(l);
@@ -1060,6 +1064,7 @@ const visualizer = (()=>{
   const clear = r.clear = ()=>
     cCtx.clearRect(0, 0, vCanvas.width, vCanvas.height);
   const draw = ()=> {
+    vCanvas.width = vCanvas.clientWidth; vCanvas.height = vCanvas.clientHeight;
     requestAnimationFrame(draw);
     if ($player.paused || $player.pausing) return;
     updateTimes();
@@ -1067,14 +1072,21 @@ const visualizer = (()=>{
     const w = vCanvas.width / bufLen / 2;
     let avg1 = 0, avg2 = 0;
     if (fftvizMode.on) {
-      cCtx.fillStyle = analyzerBinsColor;
+      const [c1, c2] = analyzerBinsColors[bigvizMode.on ? 1 : 0];
       for (const side of SIDES) {
-        const d = side === 0 ? -1 : +1;
+        const d = 1.25 * (side === 0 ? -1 : +1); // wider since highs are 0
         analyzers[side].getByteFrequencyData(aData);
         for (let i = 0, x = vCanvas.width / 2; i < bufLen; i++, x += d*w) {
           avg1 += aData[i];
-          const barHeight = aData[i]/2 + 1;
-          cCtx.fillRect(x, vCanvas.height/2 - barHeight/2, d*(w+1), barHeight);
+          const rx = Math.round(x), rw = Math.round(d*w);
+          const barHeight = aData[i] * vCanvas.height / 256;
+          cCtx.fillStyle = c1;
+          cCtx.fillRect(rx, vCanvas.height/2 - barHeight/2, rw, barHeight);
+          const inner = barHeight/4 - 10;
+          if (inner > 0) {
+            cCtx.fillStyle = c2;
+            cCtx.fillRect(rx, vCanvas.height/2 - inner, rw, 2*inner);
+          }
         }
       }
       avg1 = clip01(avg1 / bufLen / 2 / 128);
