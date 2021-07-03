@@ -10,8 +10,12 @@ const imageDelayTime = 2, imageCycleTime = 60, imageExplicitTime = 120;
 const tickerTime = 60, tickerSwapTime = 1;
 const waveNeedleColor = "#f00a", waveNeedleWidth = 4;
 const analyzerSmoothing = 0.5, analyzerBins = 512;
-const analyzerWaveColor = "#ffcc";
-const analyzerBinsColors = [["#844", "#a74"], ["#22c", "#ff4"]];
+const vizOpts = [{ fadeColor: "#0004",
+                   waveWidth: 2, waveColor: "#ffcc",
+                   binColors: ["#844", "#a74"] },
+                 { fadeColor: "#0004",
+                   waveWidth: 4, waveColor: "#fb8c",
+                   binColors: ["#22c", "#ff4"] }];
 
 // ---- utils -----------------------------------------------------------------
 
@@ -177,8 +181,7 @@ const play = (elt = $.selected) => {
     $player.volume = $player.defaultVolume;
     if (!elt) return playerStop();
     updateDisplays(path);
-    playerPlay().catch(e => {
-      if (e.code != e.ABORT_ERR) throw e; });
+    playerPlay();
     setBackgroundImageLoop(imageDelayTime);
   }
   if (!elt || $player.paused) doPlay();
@@ -250,12 +253,14 @@ const playerPause = ()=> {
   if (!$player.path) return;
   fadeTo(0, ()=> { $player.pausing = false; $player.pause(); });
 };
-const playerPlay  = ()=> {
+const playerPlay = ()=> {
   $player.pausing = false;
   if (!$player.path) return play();
   if ($player.currentTime > 0) fadeTo($player.defaultVolume);
   else $player.volume = $player.defaultVolume;
-  return $player.play();
+  return $player.play()
+    .then(visualizer.start)
+    .catch(e => { if (e.code != e.ABORT_ERR) throw e; });
 };
 const playerPlayPause = ({ctrlKey}) =>
     ctrlKey                           ? playerStop()
@@ -1101,52 +1106,67 @@ const visualizer = (()=>{
   const r = {};
   const analyzers = audio.analyzers;
   const bufLen = analyzers[0].frequencyBinCount, aData = new Uint8Array(bufLen);
-  const canvas = $("visualization");
+  const $c = $("visualization");
   const vizListeners = new Set();
   r.addListener = l => vizListeners.add(l);
   r.delListener = l => vizListeners.delete(l);
   const rootS = document.documentElement.style;
   vizListeners.add(c => rootS.setProperty("--volume", c));
-  canvas.addEventListener("click", bigvizMode);
-  const c = canvas.getContext("2d");
-  const clear = r.clear = ()=> c.clearRect(0, 0, canvas.width, canvas.height);
+  $c.addEventListener("click", bigvizMode);
+  const c = $c.getContext("2d");
+  const clear = r.clear = ()=> c.clearRect(0, 0, $c.width, $c.height);
+  const fade = fc => {
+    c.globalCompositeOperation = "destination-out";
+    c.fillStyle = fc;
+    c.fillRect(0, 0, $c.width, $c.height);
+    c.globalCompositeOperation = "source-over";
+  };
+  let playState = null; // null, true, or time we started to pause
+  r.start = ()=> { if (playState === null) { playState = true; draw(); } };
   const draw = ()=> {
-    canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight;
+    if (!playState) return;
     requestAnimationFrame(draw);
-    if ($player.paused || $player.pausing) return;
+    if (!$player.paused) playState = true; else {
+      if (playState === true) playState = Date.now();
+      else if (Date.now() > playState + 2000) return playState = null;
+      else if (Date.now() > playState + 1000) return fade("#0002");
+    }
+    if ($c.width  !== $c.clientWidth ) $c.width = $c.clientWidth;
+    if ($c.height !== $c.clientHeight) $c.height = $c.clientHeight;
+    const opts = vizOpts[bigvizMode.on ? 1 : 0];
     updateTimes();
-    clear();
-    const w = canvas.width / bufLen / 2;
+    fade(opts.fadeColor);
+    const w = $c.width / bufLen / 2;
     let avg1 = 0, avg2 = 0;
     if (!fftvizMode.on) avg1 = 0.5; else {
-      const [c1, c2] = analyzerBinsColors[bigvizMode.on ? 1 : 0];
+      const [c1, c2] = opts.binColors;
       for (const side of SIDES) {
         const d = 1.25 * (side === 0 ? -1 : +1); // wider since highs are 0
         analyzers[side].getByteFrequencyData(aData);
-        for (let i = 0, x = canvas.width / 2; i < bufLen; i++, x += d*w) {
+        for (let i = 0, x = $c.width / 2; i < bufLen; i++, x += d*w) {
           avg1 += aData[i];
           const rx = Math.round(x), rw = Math.round(d*w);
-          const barHeight = aData[i] * canvas.height / 256;
+          const barHeight = aData[i] * $c.height / 256;
           c.fillStyle = c1;
-          c.fillRect(rx, canvas.height/2 - barHeight/2, rw, barHeight);
+          c.fillRect(rx, $c.height/2 - barHeight/2, rw, barHeight);
           const inner = barHeight/4 - 10;
           if (inner > 0) {
             c.fillStyle = c2;
-            c.fillRect(rx, canvas.height/2 - inner, rw, 2*inner);
+            c.fillRect(rx, $c.height/2 - inner, rw, 2*inner);
           }
         }
       }
       avg1 = clip01(avg1 / bufLen / 2 / 128);
     }
     if (!wavvizMode.on) avg2 = 0.5; else {
-      c.lineWidth = 2; c.strokeStyle = analyzerWaveColor;
+      c.strokeStyle = opts.waveColor; c.lineWidth = opts.waveWidth;
       for (const side of SIDES) {
         const d = side === 0 ? -1 : +1;
         analyzers[side].getByteTimeDomainData(aData);
         c.beginPath();
-        for (let i = 0, x = canvas.width / 2; i < bufLen; i++, x += d*w) {
+        for (let i = 0, x = $c.width / 2; i < bufLen; i++, x += d*w) {
           avg2 += Math.abs(128 - aData[i]);
-          const y = aData[i] * canvas.height / 256;
+          const y = aData[i] * $c.height / 256;
           c.lineTo(x, y);
         }
         c.stroke();
@@ -1157,7 +1177,6 @@ const visualizer = (()=>{
       `hsl(${Math.round(120*avg2)}deg, 100%, 50%, ${Math.round(100*avg1)}%)`;
     vizListeners.forEach(l => l(color));
   };
-  draw();
   return r;
 })();
 
