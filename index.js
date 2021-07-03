@@ -1072,9 +1072,11 @@ const SIDES = [0, 1];
 const audio = (()=>{
   const c = new AudioContext();
   const src = c.createMediaElementSource($player);
+  const gain = c.createGain();
   const splitter = c.createChannelSplitter(2);
-  src.connect(c.destination);
-  src.connect(splitter);
+  src.connect(gain);
+  gain.connect(c.destination);
+  gain.connect(splitter);
   const analyzers = SIDES.map(i => {
     const a = c.createAnalyser();
     a.smoothingTimeConstant = analyzerSmoothing;
@@ -1082,22 +1084,37 @@ const audio = (()=>{
     splitter.connect(a, i);
     return a;
   });
-  const gain = c.createGain();
-  const setGain = g => {
-    const prev = gain.gain.value;
-    gain.gain.value = g;
-    if ((prev === 1) === (g === 1)) return;
-    if (g !== 1) { // connect
-      src.disconnect(c.destination);
-      src.connect(gain);
-      gain.connect(c.destination);
-    } else { // disconnect
-      src.disconnect(gain);
-      src.connect(c.destination);
-      gain.disconnect(c.destination);
-    }
+  const setGain = g => gain.gain.value = g;
+  // experimental
+  const getDevices = async ()=> {
+    await navigator.mediaDevices.getUserMedia({audio: true}); // get permission
+    return (await navigator.mediaDevices.enumerateDevices())
+      .filter(d => d.kind === "audiooutput");
   };
-  return { analyzers, setGain };
+  const showDevices = ()=>
+    getDevices().then(ds => ds.forEach(d =>
+      console.log(`${d.label} (${d.deviceId})`)));
+  let devAudio = null;
+  const useDevice = async name => {
+    const d = (await getDevices())
+      .find(d => d.label.toLowerCase().includes(name.toLowerCase()));
+    if (!d) throw Error(`No "${name}" device found`);
+    // doesn't work when it's a source in `createMediaElementSource`
+    //   (https://github.com/w3c/mediacapture-output/issues/87)
+    // await $player.setSinkId(d.deviceId);
+    if (!devAudio) {
+      devAudio = new Audio();
+      const devDest = c.createMediaStreamDestination();
+      devAudio.srcObject = devDest.stream;
+      gain.disconnect(c.destination);
+      gain.connect(devDest);
+      devAudio.play();
+    }
+    console.log(`Connecting to ${d.label}`);
+    devAudio.setSinkId(d.deviceId);
+  };
+  //
+  return { analyzers, setGain, showDevices, useDevice };
 })();
 
 // ---- visualizations --------------------------------------------------------
