@@ -87,7 +87,6 @@ body.bigviz .item.player {
 }
 #control-panel.drag-to { background: #4448; }
 #control-panel > div { display: inline-block; }
-#wave { display: block; width: 10em; height: 2ex; }
 
 #viz-container { margin: -50% 0; vertical-align: middle; }
 #visualization { width: 100%; height: 14ex; }
@@ -95,6 +94,14 @@ body.bigviz #visualization {
   position: fixed; left: 0; top: 0; width: 100vw; height: 100vh;
   pointer-events: none; opacity: 0.75;
 }
+
+#message {
+  position: fixed; top: 1em; margin: var(--page-margin); font-size: 62.5%;
+  background: #633c; box-shadow: 4px 4px 2px 0px #3368; border-radius: 5px;
+  padding: 5px; pointer-events: none; white-space: pre;
+  right: -8em; opacity: 0; transition: right 0.5s, opacity 0.5s;
+}
+#message.active { right: 1em; opacity: 1; }
 
 #track-info { overflow: hidden; position: relative; }
 #track-info > div {
@@ -140,7 +147,8 @@ body.bigviz #visualization {
 #playerbuttons.playing > #p-pause { display: inline-block; }
 #playerbuttons.playing > #p-play  { display: none; }
 
-#wave { position: relative; background: #666; cursor: col-resize; }
+#wave { position: relative; display: block; width: 10em; height: 2ex;
+        background: #666; cursor: col-resize; }
 #wave-image, #wave-canvas { width: 100%; height: 100%; }
 #wave-canvas { position: absolute; top: 0; left: 0; }
 

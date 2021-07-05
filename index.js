@@ -29,6 +29,9 @@ const mod = (n, m) => { const r = n % m; return r < 0 ? r + m : r; };
 const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
 const clipRange = (lo, x, hi) => Math.max(Math.min(x,hi), lo);
 const clip01 = x => clipRange(0, x, 1);
+const padL = (s, n, c = "\u2007") =>
+  typeof s !== "string" ? padL(String(s), n, c)
+  : s.length >= n ? s : c.repeat(n - s.length) + s;
 
 const addLazyProp = (o, name, get) =>
   Object.defineProperty(o, name, {configurable: true, get: ()=> {
@@ -59,6 +62,15 @@ const wheelToN = (e, n1, n2, dflt) =>
                   item = elt;
                   if (item instanceof Element) item.classList.add(prop); } });
 });
+
+const $message = $("message");
+const message = txt => {
+  $message.innerHTML = txt;
+  $message.classList.add("active");
+  if (message.timer) clearTimeout(message.timer);
+  message.timer = setTimeout(()=> {
+    message.timer = null; $message.classList.remove("active"); }, 2000);
+};
 
 const blankPNG =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQ"
@@ -564,6 +576,7 @@ const mkToggle = (id, cb = null, h = null) => {
   const toggle = e => {
     if (h && h(e)) return;
     elt.classList.toggle("on", (toggle.on = !toggle.on));
+    message(`${elt.title}: ${toggle.on ? "on" : "off"}`);
     if (cb) cb(toggle.on);
   };
   toggle.on = elt.classList.contains("on");
@@ -635,8 +648,7 @@ const updateVolume = v => {
   const vol = clip01(v / $volumeMax);
   fadeTo($player.defaultVolume = vol);
   $volume.value = Math.round($volumeMax * vol);
-  $volume.title = `${$rate.title.replace(/ *=.*/, "")} = ${
-                       Math.round(vol*100)}%`;
+  message(`${$volume.title}: ${padL(Math.round(vol*100), 3)}%`);
 };
 $volume.addEventListener("input", ()=> updateVolume(+$volume.value));
 $volume.addEventListener("mousedown", e =>
@@ -651,14 +663,15 @@ bind("Numpad2", e => e.ctrlKey
 $player.defaultPlaybackRate = 1;
 const $rate = $("rate"), $rateMax = +$rate.max;
 $rate.value = $rateMax / 2;
+const rateFracs = "0 ⅛ ¼ ⅜ ½ ⅝ ¾ ⅞ 1 1⅛ 1¼ 1⅜ 1½ 1⅝ 1¾ 1⅞ 2".split(" ");
 const updateRate = r => {
   const rate = clip01(r / $rateMax) + 0.5;
   $player.preservesPitch = false;
   $player.defaultPlaybackRate = $player.playbackRate = rate;
   $rate.value = Math.round($rateMax * (rate - 0.5));
-  const S = 8, n = Math.round(rate*S), d = gcd(n, S);
-  const frac = d === S ? `${n/d}` : `${n/d}/${S/d}`;
-  $rate.title = `${$rate.title.replace(/ *=.*/, "")} = ${frac}`;
+  const frac = rateFracs[Math.round(rate*8)];
+  message(`${$rate.title
+    }: <span style="display: inline-block; width: 1.25em;">${frac}</span>`);
 };
 $rate.addEventListener("input", ()=> updateRate(+$rate.value));
 $rate.addEventListener("mousedown", e =>
@@ -675,7 +688,7 @@ const updateGain = g => {
   const gain = Math.round(clip01(g / $gainMax) * 4 * $gainMax) / 4;
   audio.setGain(gain);
   $gain.value = gain;
-  $gain.title = `${$gain.title.replace(/ *=.*/, "")} = ${gain}`;
+  message(`${$gain.title}: ${gain.toFixed(2)}`);
 };
 $gain.addEventListener("input", ()=> updateGain(+$gain.value));
 $gain.addEventListener("mousedown", e => e.button === 1 && updateGain(1));
