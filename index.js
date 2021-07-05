@@ -8,7 +8,7 @@ const bigSkip = 60, smallSkip = 5, smallerSkipDiv = 2;
 const fadeToFreq = 20, pauseFade = 0.5, switchFade = 0.25; // time for 0-1 fade
 const imageDelayTime = 2, imageCycleTime = 60, imageExplicitTime = 120;
 const tickerTime = 60, tickerSwapTime = 1;
-const waveNeedleColor = "#f00a", waveNeedleWidth = 4;
+const waveNeedleColor = "#f00a", waveNeedleWidth = 2;
 const analyzerSmoothing = 0.5, analyzerBins = 512;
 const vizOpts = [{ fadeColor: "#0004",
                    waveWidth: 2, waveColor: "#ffcc",
@@ -574,23 +574,10 @@ const loopMode   = mkToggle("loop");
 const fftvizMode = mkToggle("fftviz");
 const wavvizMode = mkToggle("wavviz");
 const bigvizMode = mkToggle("bigviz", on =>
-  $("visualization").classList.toggle("fullsize", on));
-const flashyMode = mkToggle("flashy", on => {
-  $main.classList.toggle("volumebg", on);
-  $plist.classList.toggle("volumebg", on);
-}, e => {
-  if (!e?.shiftKey) return false;
-  const win = window.open(
-    "", "_blank",
-    "resizable=1,scrollbars=0,menubar=0,toolbar=0,location=0,status=0");
-  const body = win.document.body;
-  body.parentElement.style.background = "#000";
-  const setbg = c => body.style.background = c;
-  setbg("#000");
-  visualizer.addListener(setbg);
-  win.addEventListener("unload", ()=> visualizer.delListener(setbg));
-  return true;
-});
+  document.body.classList.toggle("bigviz", on));
+const flashyMode = mkToggle("flashy",
+  on => document.body.classList.toggle("flashy", on),
+  e => e?.shiftKey && (mkFlashyWindow(), true));
 
 // ---- player interactions ---------------------------------------------------
 
@@ -1128,7 +1115,11 @@ const visualizer = (()=>{
   r.addListener = l => vizListeners.add(l);
   r.delListener = l => vizListeners.delete(l);
   const rootS = document.documentElement.style;
-  vizListeners.add(c => rootS.setProperty("--volume", c));
+  vizListeners.add((vol1, vol2, col) => {
+    rootS.setProperty("--volume1", vol1);
+    rootS.setProperty("--volume2", vol2);
+    rootS.setProperty("--volcolor", col);
+  });
   $c.addEventListener("click", bigvizMode);
   const c = $c.getContext("2d");
   const clear = r.clear = ()=> c.clearRect(0, 0, $c.width, $c.height);
@@ -1190,12 +1181,25 @@ const visualizer = (()=>{
       }
       avg2 = clip01(avg2 / bufLen / 2 / 64);
     }
+    // vol1 is avg of the fft so it's smooth, avg2 is fast-responding
     const color =
       `hsl(${Math.round(120*avg2)}deg, 100%, 50%, ${Math.round(100*avg1)}%)`;
-    vizListeners.forEach(l => l(color));
+    vizListeners.forEach(l => l(avg1.toFixed(3), avg2.toFixed(3), color));
   };
   return r;
 })();
+
+const mkFlashyWindow = ()=> {
+  const win = window.open(
+    "", "_blank",
+    "resizable=1,scrollbars=0,menubar=0,toolbar=0,location=0,status=0");
+  const body = win.document.body;
+  body.parentElement.style.background = "#000";
+  const setbg = (vol1, vol2, col) => body.style.background = col;
+  setbg("#000");
+  visualizer.addListener(setbg);
+  win.addEventListener("unload", ()=> visualizer.delListener(setbg));
+};
 
 // ---- initialization --------------------------------------------------------
 
