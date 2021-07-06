@@ -636,10 +636,22 @@ bind("ArrowRight",     trackSkip(+1));
   if (media) navigator.mediaSession.setActionHandler(media, handler);
 });
 
-const percentJump = e => isFinite($player.duration)
-  && ($player.currentTime =
-        (+e.code.substring(e.code.length-1)) * $player.duration / 10);
-bind("0123456789".split("").map(d => "Digit"+d), percentJump);
+const markers = new Map();
+const markerJump = e => {
+  const {key, code, shiftKey: shift, ctrlKey: ctrl} = e;
+  const n = +e.code.substring(code.length-1);
+  if (ctrl) {
+    let m = markers.get($player.path);
+    if (!m) markers.set($player.path, m = new Array(10));
+    m[n] = $player.currentTime + 0.015; // reaction time
+  } else { // defaults to a spread of 10 markers (youtube-style)
+    $player.currentTime =
+      markers.get($player.path)?.[n]
+      || (isFinite($player.duration) ? n * $player.duration / 10
+          : $player.currentTime);
+  }
+};
+bind("0123456789".split("").map(d => "Digit"+d), markerJump);
 
 $player.defaultVolume = 1; // made up field
 const $volume = $("volume"), $volumeMax = +$volume.max;
@@ -703,17 +715,16 @@ $("control-panel").addEventListener("wheel", e =>
 
 const updateTimes = ()=> {
   const $dur = $("dur"), $time = $("time");
-  const formatTime = t => {
-    const s = Math.abs(t) % 60;
-    return Math.floor(t/60) + ":" + (s<10 ? "0" : "") + s; };
+  const formatTime = t =>
+    Math.floor(t/60) + ":" + padL(Math.abs(t) % 60, 2, "0");
   if (!isFinite($player.duration) || !$.player) {
     updateTimes.shownTime = null;
-    updateTimes.shownURL  = null;
+    updateTimes.shownPath = null;
     $dur.innerText = $time.innerText = "–:––";
     return;
   }
-  if (updateTimes.shownURL != $player.path && $player.duration) {
-    updateTimes.shownURL = $player.path;
+  if (updateTimes.shownPath != $player.path && $player.duration) {
+    updateTimes.shownPath = $player.path;
     $dur.innerText = formatTime(Math.round($player.duration));
   }
   let t = $player.currentTime;
