@@ -33,13 +33,6 @@ const padL = (s, n, c = "\u2007") =>
   typeof s !== "string" ? padL(String(s), n, c)
   : s.length >= n ? s : c.repeat(n - s.length) + s;
 
-const addLazyProp = (o, name, get) =>
-  Object.defineProperty(o, name, {configurable: true, get: ()=> {
-    const value = get(o);
-    Object.defineProperty(o, name, {value, writable: true});
-    return value;
-  }});
-
 const shuffle = xs => {
   xs = xs.slice();
   xs.forEach((x,i) => {
@@ -48,6 +41,13 @@ const shuffle = xs => {
   });
   return xs;
 };
+
+const addLazyProp = (o, name, get) =>
+  Object.defineProperty(o, name, {configurable: true, get: ()=> {
+    const value = get(o);
+    Object.defineProperty(o, name, {value, writable: true});
+    return value;
+  }});
 
 const wheelToN = (e, n1, n2, dflt) =>
   (e.deltaY > 0 ? +n1 : e.deltaY < 0 ? -n1
@@ -185,14 +185,15 @@ const addItemEvents = (elt, info) => {
 const $player = $("player");
 const play = (elt = $.selected) => {
   if (typeof elt == "string") elt = $(elt);
-  if (elt && getInfo(elt).type != "audio") elt = null;
+  const info = getInfo(elt);
+  if (elt && info.type != "audio") elt = null;
   if ($.player == elt) $player.currentTime = 0;
   $.player = elt;
   const path = elt ? getPath(elt) : null;
   const doPlay = ()=> {
     $player.volume = $player.defaultVolume;
     if (!elt) return playerStop();
-    updateDisplays(path);
+    updateDisplays(info);
     playerPlay();
     setBackgroundImageLoop(imageDelayTime);
   }
@@ -253,21 +254,21 @@ const fadeTo = (tgtTime, cb) => {
 $player.pausing = false; // made up field
 const playerStop = ()=> {
   $player.pausing = false;
-  if (!$player.path) return;
+  if (!$player.info) return;
   if (!$player.paused) $player.pause();
   $player.currentTime = 0;
   $.player = null;
   playerButtonsPlaying(false);
-  updateDisplays("");
+  updateDisplays(null);
 };
 const playerPause = ()=> {
   $player.pausing = true;
-  if (!$player.path) return;
+  if (!$player.info) return;
   fadeTo(0, ()=> { $player.pausing = false; $player.pause(); });
 };
 const playerPlay = ()=> {
   $player.pausing = false;
-  if (!$player.path) return play();
+  if (!$player.info) return play();
   if ($player.currentTime > 0) fadeTo($player.defaultVolume);
   else $player.volume = $player.defaultVolume;
   return $player.play()
@@ -286,7 +287,7 @@ const doLeftoverSkip = ()=> {
   trackSkipTo(t > 0 ? t : $player.duration + t);
 };
 const trackSkipTo = time => {
-  if (!$player.path) return;
+  if (!$player.info) return;
   if (time < 0) {
     $player.leftoverSkip = time;
     playerNextPrev(false);
@@ -325,14 +326,17 @@ $player.addEventListener("pause", ()=> playerButtonsPlaying(false));
 $player.addEventListener("ended", ()=> playerNextPrev(true));
 $player.addEventListener("loadeddata", doLeftoverSkip);
 
-$player.path = ""; // made up field
-const updateDisplays = (src = $player.path) => {
-  if ($player.path != src) $player.src = $player.path = src;
+$player.info = null; // made up field
+const updateDisplays = info => {
+  if ($player.info != info) {
+    $player.info = info;
+    $player.src = info?.path || "";
+  }
   $("wave-image").src =
-    !src ? reddishPNG : "/images" + src.replace(/[.][^.]+$/, ".png");
+    !info ? reddishPNG : "/images" + info.path.replace(/[.][^.]+$/, ".png");
   updateTimes();
   updateTrackInfo();
-  if (!src) visualizer.clear();
+  if (!info) visualizer.clear();
 };
 
 // ---- navigation ------------------------------------------------------------
@@ -641,12 +645,12 @@ const markerJump = e => {
   const {key, code, shiftKey: shift, ctrlKey: ctrl} = e;
   const n = +e.code.substring(code.length-1);
   if (ctrl) {
-    let m = markers.get($player.path);
-    if (!m) markers.set($player.path, m = new Array(10));
+    let m = markers.get($player.info);
+    if (!m) markers.set($player.info, m = new Array(10));
     m[n] = $player.currentTime + 0.015; // reaction time
   } else { // defaults to a spread of 10 markers (youtube-style)
     $player.currentTime =
-      markers.get($player.path)?.[n]
+      markers.get($player.info)?.[n]
       || (isFinite($player.duration) ? n * $player.duration / 10
           : $player.currentTime);
   }
@@ -723,8 +727,9 @@ const updateTimes = ()=> {
     $dur.innerText = $time.innerText = "–:––";
     return;
   }
-  if (updateTimes.shownPath != $player.path && $player.duration) {
-    updateTimes.shownPath = $player.path;
+  const path = $player.info?.path || "";
+  if (updateTimes.shownPath != path && $player.duration) {
+    updateTimes.shownPath = path;
     $dur.innerText = formatTime(Math.round($player.duration));
   }
   let t = $player.currentTime;
@@ -775,7 +780,7 @@ const infoDisplay = (()=> {
 })();
 
 const updateTrackInfo = ()=> {
-  if (!$player.path) return infoDisplay("");
+  if (!$player.info) return infoDisplay("");
   const info = $.player && getInfo($.player), sep = " • ";
   let text = "";
   if (info) {
@@ -1237,7 +1242,7 @@ const init = data => {
   renderItem($main, all, true);
   $main.firstElementChild.classList.add("open");
   selectNext($main, +1);
-  updateDisplays("");
+  updateDisplays(null);
 };
 
 fetch("info", { method: "HEAD" })
