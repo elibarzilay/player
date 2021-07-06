@@ -194,6 +194,16 @@ const play = (elt = $.selected) => {
   if ($.player === elt) $player.currentTime = 0;
   $.player = elt;
   const path = elt ? getPath(elt) : null;
+  if (path && !("beats" in info)) {
+    info.beats = null;
+    const dur = info.duration = +info.duration;
+    fetch("/beats" + path.replace(/[.][^.]+$/, ".json"))
+      .then(x => x.ok && x.json())
+      .then(x => info.beats = x?.length && [
+        ...(x[0] > 0 ? [0] : []),
+        ...x,
+        ...(x[x.length-1] < dur ? [dur] : [])]);
+  }
   const doPlay = ()=> {
     $player.volume = $player.defaultVolume;
     if (!elt) return playerStop();
@@ -299,8 +309,17 @@ const trackSkipTo = time => {
   } else if (isFinite($player.duration) && time > $player.duration) {
     $player.leftoverSkip = time - $player.duration;
     playerNextPrev(true);
-  } else {
+  } else if (!$player.info.beats) {
     $player.currentTime = time;
+  } else {
+    // this needs to do much more: should register the switch on the time stamp
+    // so it's precise even if playing a different speeds; multiple movements
+    // should start from the last intended destination instead of where we are,
+    // to handle quick movements
+    setTimeout(()=>
+      $player.currentTime = findBeat(time, $player.info.beats),
+      1000 * (findBeat($player.currentTime, $player.info.beats, "next")
+              - $player.currentTime));
   }
 };
 const trackSkip = dir => ({shiftKey, ctrlKey}) => {
@@ -720,6 +739,26 @@ $("control-panel").addEventListener("wheel", e =>
 
 // ---- time display ----------------------------------------------------------
 
+// const tick = ()=>
+//   (tick.sound ??= new Audio("/.player/beats/tick.wav")).play();
+
+const drawBeat = (()=>{
+  let d = null, s = null;
+  return beat => {
+    if (!d) {
+      d = document.createElement("div"), s = d.style;
+      s.position = "fixed"; s.pointerEvents = "none";
+      s.right = s.bottom = "0"; s.width = s.height = "100%";
+      s.borderRadius = "50%";
+      document.body.append(d);
+    }
+    if (!beat) return s.display = "none";
+    s.display = "";
+    s.backgroundColor = `hsla(60, 100%, 50%, ${beat})`;
+    s.width = s.height = `${beat*100}%`;
+  };
+})();
+
 const updateTimes = ()=> {
   const $dur = $("dur"), $time = $("time");
   const formatTime = t => floor(t/60) + ":" + padL(abs(t) % 60, 2, "0");
@@ -735,6 +774,8 @@ const updateTimes = ()=> {
     $dur.innerText = formatTime(round($player.duration));
   }
   let t = $player.currentTime;
+  const beats = $player.info?.beats;
+  drawBeat(beats?.length ? spike(spike(findBeat(t, beats, "beat"))) : null);
   if (timeRemaining) t = $player.duration - t;
   t = round(t);
   if (updateTimes.shownTime !== t) {
@@ -1207,6 +1248,58 @@ const mkFlashyWindow = ()=> {
   setbg("#000");
   visualizer.addListener(setbg);
   win.addEventListener("unload", ()=> visualizer.delListener(setbg));
+};
+
+// ---- experimental beat detection -------------------------------------------
+
+const findBeat = (t, bs, mode = null) => {
+  const next = mode === "next", beat = mode === "beat";
+  if (!bs || !bs.length) return beat ? 0 : t;
+  if (bs.length === 1) return beat ? 0 : bs[0];
+  let lo = beat ? 1 : 0, hi = bs.length - (beat ? 2 : 1), mid = 0;
+  if (t <= bs[lo]) return beat ? max(0, 1 - (bs[lo]-t)/(bs[lo]-bs[lo-1])) : bs[lo];
+  if (t >= bs[hi]) return beat ? max(0, 1 - (t-bs[hi])/(bs[hi+1]-bs[hi])) : bs[hi];
+  const between = (lo, hi) => beat
+    ? abs(2*t - lo - hi) / (hi - lo)
+    : next ? hi : t - lo <= hi - t ? lo : hi;
+  while (lo <= hi) {
+    mid = floor((lo + hi) / 2);
+    if (bs[mid] === t) return beat ? 1 : t;
+    if (mid === lo) return between(bs[lo], bs[hi]);
+    if (bs[mid] < t) lo = mid; else hi = mid;
+  }
+  return t; // shouldn't happen
+};
+
+/*
+const beats = [0, 10, 20, 40, 60, 90], modes = [null, "next", "beat"];
+const pad = (n, s) => (" ".repeat(max(0, n - String(s).length))) + s;
+for (i = -10; i <= 100; i += 1) {
+  let f = mode => {
+    let r = findBeat(i, beats, mode); if (mode === "beat") r = spike(r);
+    let s = pad(3, round(r*10)/10);
+    return s + (mode !== "beat" ? "" : " #" + "#".repeat(round(r*100)));
+  }
+  const line = `${pad(5,i.toFixed(1))}: ${modes.map(mode =>
+                 `${mode}: ${f(mode)}`).join("   ")}`;
+  console.log(beats.includes(i) ? line.replace(/ /g, "=") : line);
+}
+*/
+
+const computeBeats = async (url = $player.src) => {
+  if (!window.MusicTempo) {
+    const s = document.createElement("script");
+    s.src = "/.player/beats/music-tempo.min.js";
+    document.head.append(s);
+  }
+  if (!url) { console.error("no url given"); return; }
+  const data = await (await fetch($player.src)).arrayBuffer();
+  const buff = await (new AudioContext()).decodeAudioData(data);
+  const buf0 = buff.getChannelData(0);
+  const buf1 = buff.getChannelData(buff.numberOfChannels > 1 ? 1 : 0);
+  const mt = window.mt = new MusicTempo(buf0.map((n0, i) => (n0 + buf1[i])/2));
+  console.log(mt.tempo);
+  console.log(`[${mt.beats.map(n => +n.toFixed(3)).join(",")}]`);
 };
 
 // ---- initialization --------------------------------------------------------
