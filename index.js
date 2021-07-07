@@ -21,13 +21,15 @@ const vizOpts = [{ fadeColor: "#0004",
 
 const $ = x => document.getElementById(x);
 const rec = f => f((...xs) => rec(f)(...xs));
-const isArray  = Array.isArray;
-const isFinite = Number.isFinite;
+const { isArray } = Array;
+const { isFinite } = Number;
+const { round, floor, abs, max, min, random } = Math;
+const { now } = Date;
 const U = undefined;
 
 const mod = (n, m) => { const r = n % m; return r < 0 ? r + m : r; };
 const gcd = (a, b) => b === 0 ? a : gcd(b, a % b);
-const clipRange = (lo, x, hi) => Math.max(Math.min(x,hi), lo);
+const clipRange = (lo, x, hi) => max(min(x,hi), lo);
 const clip01 = x => clipRange(0, x, 1);
 const padL = (s, n, c = "\u2007") =>
   typeof s !== "string" ? padL(String(s), n, c)
@@ -36,7 +38,7 @@ const padL = (s, n, c = "\u2007") =>
 const shuffle = xs => {
   xs = xs.slice();
   xs.forEach((x,i) => {
-    const j = i + Math.floor(Math.random() * (xs.length - i));
+    const j = i + floor(random() * (xs.length - i));
     xs[i] = xs[j], xs[j] = x;
   });
   return xs;
@@ -235,20 +237,20 @@ const setBackgroundImage = (eltOrPath = $.player) => {
 const fadeTo = (tgtTime, cb) => {
   const [target, time] = isArray(tgtTime) ? tgtTime : [tgtTime, pauseFade];
   const fade = ()=> {
-    const now = Date.now();
-    if ($player.paused || now >= end) {
+    const t = now();
+    if ($player.paused || t >= end) {
       $player.volume = target;
       fadeTo.timer = null;
       if (cb) cb();
       return;
     }
-    $player.volume = target + dir * (end - now) / (1000 * time);
+    $player.volume = target + dir * (end - t) / (1000 * time);
     fadeTo.timer = setTimeout(fade, 1000/fadeToFreq);
   };
   if (fadeTo.timer) clearTimeout(fadeTo.timer);
   fadeTo.timer = setTimeout(fade, 1000/fadeToFreq);
   const from = $player.volume, dir = from > target ? +1 : -1;
-  const end  = Date.now() + 1000 * time * Math.abs(target - from);
+  const end  = now() + 1000 * time * abs(target - from);
 };
 
 $player.pausing = false; // made up field
@@ -663,8 +665,8 @@ $volume.value = $volumeMax;
 const updateVolume = v => {
   const vol = clip01(v / $volumeMax);
   fadeTo($player.defaultVolume = vol);
-  $volume.value = Math.round($volumeMax * vol);
-  message(`${$volume.title}: ${padL(Math.round(vol*100), 3)}%`);
+  $volume.value = round($volumeMax * vol);
+  message(`${$volume.title}: ${padL(round(vol*100), 3)}%`);
 };
 $volume.addEventListener("input", ()=> updateVolume(+$volume.value));
 $volume.addEventListener("mousedown", e =>
@@ -684,8 +686,8 @@ const updateRate = r => {
   const rate = clip01(r / $rateMax) + 0.5;
   $player.preservesPitch = false;
   $player.defaultPlaybackRate = $player.playbackRate = rate;
-  $rate.value = Math.round($rateMax * (rate - 0.5));
-  const frac = rateFracs[Math.round(rate*8)];
+  $rate.value = round($rateMax * (rate - 0.5));
+  const frac = rateFracs[round(rate*8)];
   message(`${$rate.title
     }: <span style="display: inline-block; width: 1.25em;">${frac}</span>`);
 };
@@ -701,7 +703,7 @@ bind(["="], ()=> updateRate($rateMax/2));
 const $gain = $("gain"), $gainMax = +$gain.max;
 $gain.value = 1;
 const updateGain = g => {
-  const gain = Math.round(clip01(g / $gainMax) * 4 * $gainMax) / 4;
+  const gain = round(clip01(g / $gainMax) * 4 * $gainMax) / 4;
   audio.setGain(gain);
   $gain.value = gain;
   message(`${$gain.title}: ${gain.toFixed(2)}`);
@@ -719,8 +721,7 @@ $("control-panel").addEventListener("wheel", e =>
 
 const updateTimes = ()=> {
   const $dur = $("dur"), $time = $("time");
-  const formatTime = t =>
-    Math.floor(t/60) + ":" + padL(Math.abs(t) % 60, 2, "0");
+  const formatTime = t => floor(t/60) + ":" + padL(abs(t) % 60, 2, "0");
   if (!isFinite($player.duration) || !$.player) {
     updateTimes.shownTime = null;
     updateTimes.shownPath = null;
@@ -730,11 +731,11 @@ const updateTimes = ()=> {
   const path = $player.info?.path || "";
   if (updateTimes.shownPath != path && $player.duration) {
     updateTimes.shownPath = path;
-    $dur.innerText = formatTime(Math.round($player.duration));
+    $dur.innerText = formatTime(round($player.duration));
   }
   let t = $player.currentTime;
   if (timeRemaining) t = $player.duration - t;
-  t = Math.round(t);
+  t = round(t);
   if (updateTimes.shownTime != t) {
     updateTimes.shownTime = t;
     $time.innerText = (timeRemaining ? "-" : "") + formatTime(t);
@@ -743,7 +744,7 @@ const updateTimes = ()=> {
 
 // ---- info display ----------------------------------------------------------
 
-const infoDisplay = (()=> {
+const infoDisplay = (()=>{
   const infoDiv = $("track-info"), textDiv = infoDiv.firstElementChild;
   const START = 0, END = 1, CLEARSTART = 2, CLEAREND = 3, NEWTEXT = 4;
   let initialized = false, state = START, newText = "", moveTo = 0;
@@ -790,15 +791,14 @@ const updateTrackInfo = ()=> {
     if (info.track) text += ` (#${info.track})`;
     if (info.date)  text += `, ${info.date}`;
     text += sep;
-    text += info.artist || (info.parent.parent && info.parent.parent.name)
-            || "???";
+    text += info.artist || info.parent.parent?.name || "???";
   }
   infoDisplay(text);
 };
 
 // ---- waveform control ------------------------------------------------------
 
-const drawPlayerLine = (()=> {
+const drawPlayerLine = (()=>{
   const canvas = $("wave-canvas"), ctx = canvas.getContext("2d");
   return ()=> {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -863,7 +863,7 @@ const mkSearcher = (str, {sep = "/", pfxSep = true, sfxSep = false} = {}) => {
         const poss = rxs.map(rx =>
           (rx.lastIndex = pos, (rx.exec(inp) ? rx.lastIndex : -1)));
         if (poss.some(p => p < 0)) return false;
-        pos = Math.max(...poss);
+        pos = max(...poss);
         if (pos < 0) return false;
         if (rxs === last) break;
       }
@@ -1164,9 +1164,10 @@ const visualizer = (()=>{
     if (!playState) return;
     requestAnimationFrame(draw);
     if (!$player.paused) playState = true; else {
-      if (playState === true) playState = Date.now();
-      else if (Date.now() > playState + 2000) return playState = null;
-      else if (Date.now() > playState + 1000) return fade("#0002");
+      const t = now();
+      if (playState === true) playState = t;
+      else if (t > playState + 2000) return playState = null;
+      else if (t > playState + 1000) return fade("#0002");
     }
     if ($c.width  !== $c.clientWidth ) $c.width = $c.clientWidth;
     if ($c.height !== $c.clientHeight) $c.height = $c.clientHeight;
@@ -1182,7 +1183,7 @@ const visualizer = (()=>{
         analyzers[side].getByteFrequencyData(aData);
         for (let i = 0, x = $c.width / 2; i < bufLen; i++, x += d*w) {
           avg1 += aData[i];
-          const rx = Math.round(x), rw = Math.round(d*w);
+          const rx = round(x), rw = round(d*w);
           const barHeight = aData[i] * $c.height / 256;
           c.fillStyle = c1;
           c.fillRect(rx, $c.height/2 - barHeight/2, rw, barHeight);
@@ -1202,7 +1203,7 @@ const visualizer = (()=>{
         analyzers[side].getByteTimeDomainData(aData);
         c.beginPath();
         for (let i = 0, x = $c.width / 2; i < bufLen; i++, x += d*w) {
-          avg2 += Math.abs(128 - aData[i]);
+          avg2 += abs(128 - aData[i]);
           const y = aData[i] * $c.height / 256;
           c.lineTo(x, y);
         }
@@ -1212,7 +1213,7 @@ const visualizer = (()=>{
     }
     // vol1 is avg of the fft so it's smooth, avg2 is fast-responding
     const color =
-      `hsl(${Math.round(120*avg2)}deg, 100%, 50%, ${Math.round(100*avg1)}%)`;
+      `hsl(${round(120*avg2)}deg, 100%, 50%, ${round(100*avg1)}%)`;
     vizListeners.forEach(l => l(avg1.toFixed(3), avg2.toFixed(3), color));
   };
   return r;
