@@ -6,15 +6,15 @@
   <link rel="stylesheet" type="text/css" href=".player/index.css" media="all">
 </head>
 <body>
-  <div id="search-panel">
+  <div id="search-panel" class="control">
     <span id="result-number"></span> &nbsp;&nbsp;
     / <input id="search" type="text" value="" size="20" placeholder="search"
              spellcheck="false"> /
   </div>
-  <div id="control-panel">
+  <div id="control-panel" class="control">
     <div id="times"><div id="time">?:??</div><div id="dur">?:??</div></div>
     <div>
-      <div id="playerbuttons">
+      <div id="playerbuttons" class="media-buttons">
         <div id="p-prev" >0</div>
         <div id="p-rew"  >1</div>
         <div id="p-stop" >2</div>
@@ -41,8 +41,7 @@
     </div>
     <br>
     <span id="flashy" class="toggle off" title="Flashy">❊</span>
-    <img  id="loop"   class="toggle on"  title="Loopy"
-          height="28" src="fonts/loop.svg">
+    <div id="loop" class="media-buttons toggle on" title="Loopy">7</div>
     <div id="track-info" class="fill-right"><div></div></div>
   </div>
   <div id="message"></div>

@@ -68,6 +68,10 @@ const message = txt => {
     message.timer = null; $message.classList.remove("active"); }, 2000);
 };
 
+// desmos: 1-\cos\left(\frac{\pi}{2}\left(1-\operatorname{abs}\left(x-
+// \left\{-1\le x<1:\ 0,\ 1\le x<3:\ 2,\ 3\le x:4\right\}\right)\right)\right)
+const spike = n => 1 - Math.cos((Math.PI/2)*n);
+
 const hsl = (h, s, l, a) =>
   `hsl(${round(h)}deg, ${round(s)}%, ${round(l)}%, ${round(a)}%)`;
 
@@ -590,7 +594,7 @@ const loopMode   = mkToggle("loop");
 const fftvizMode = mkToggle("fftviz");
 const wavvizMode = mkToggle("wavviz");
 const bigvizMode = mkToggle("bigviz", on =>
-  document.body.classList.toggle("bigviz", on));
+  document.documentElement.classList.toggle("bigviz", on));
 const flashyMode = mkToggle("flashy",
   on => document.body.classList.toggle("flashy", on),
   e => e?.shiftKey && (mkFlashyWindow(), true));
@@ -1195,7 +1199,7 @@ const visualizer = (()=>{
       avg1 = clip01(avg1 / bufLen / 2 / 128);
     }
     if (!wavvizMode.on) avg2 = 0.5; else {
-      c.strokeStyle = "#fb4f"; c.lineWidth = bigvizMode.on ? 4 : 2;
+      c.strokeStyle = "#8f4f"; c.lineWidth = bigvizMode.on ? 4 : 2;
       c.lineJoin = "bevel"; c.lineCap = "round";
       for (const side of SIDES) {
         const d = side === 0 ? -1 : +1;
