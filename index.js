@@ -10,12 +10,6 @@ const imageDelayTime = 2, imageCycleTime = 60, imageExplicitTime = 120;
 const tickerTime = 60, tickerSwapTime = 1;
 const waveNeedleColor = "#f00a", waveNeedleWidth = 2;
 const analyzerSmoothing = 0.5, analyzerBins = 512;
-const vizOpts = [{ fadeColor: "#0004",
-                   waveWidth: 2, waveColor: "#ffcc",
-                   binColors: ["#844", "#a74"] },
-                 { fadeColor: "#0004",
-                   waveWidth: 4, waveColor: "#fb8c",
-                   binColors: ["#22c", "#ff4"] }];
 
 // ---- utils -----------------------------------------------------------------
 
@@ -73,6 +67,9 @@ const message = txt => {
   message.timer = setTimeout(()=> {
     message.timer = null; $message.classList.remove("active"); }, 2000);
 };
+
+const hsl = (h, s, l, a) =>
+  `hsl(${round(h)}deg, ${round(s)}%, ${round(l)}%, ${round(a)}%)`;
 
 const blankPNG =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQ"
@@ -1159,6 +1156,7 @@ const visualizer = (()=>{
     c.globalCompositeOperation = "source-over";
   };
   let playState = null; // null, true, or time we started to pause
+  let vol1 = 0, vol2 = 0; // available from last draw
   r.start = ()=> { if (playState === null) { playState = true; draw(); } };
   const draw = ()=> {
     if (!playState) return;
@@ -1171,13 +1169,13 @@ const visualizer = (()=>{
     }
     if ($c.width  !== $c.clientWidth ) $c.width = $c.clientWidth;
     if ($c.height !== $c.clientHeight) $c.height = $c.clientHeight;
-    const opts = vizOpts[bigvizMode.on ? 1 : 0];
     updateTimes();
-    fade(opts.fadeColor);
+    fade("#0004");
     const w = $c.width / bufLen / 2;
     let avg1 = 0, avg2 = 0;
     if (!fftvizMode.on) avg1 = 0.5; else {
-      const [c1, c2] = opts.binColors;
+      const c1 = hsl(-80*vol2, 100, 75*vol1,     75);
+      const c2 = hsl( 80*vol2, 100, 75*vol1+25, 100);
       for (const side of SIDES) {
         const d = 1.25 * (side === 0 ? -1 : +1); // wider since highs are 0
         analyzers[side].getByteFrequencyData(aData);
@@ -1197,13 +1195,14 @@ const visualizer = (()=>{
       avg1 = clip01(avg1 / bufLen / 2 / 128);
     }
     if (!wavvizMode.on) avg2 = 0.5; else {
-      c.strokeStyle = opts.waveColor; c.lineWidth = opts.waveWidth;
+      c.strokeStyle = "#fb4f"; c.lineWidth = bigvizMode.on ? 4 : 2;
+      c.lineJoin = "bevel"; c.lineCap = "round";
       for (const side of SIDES) {
         const d = side === 0 ? -1 : +1;
         analyzers[side].getByteTimeDomainData(aData);
         c.beginPath();
         for (let i = 0, x = $c.width / 2; i < bufLen; i++, x += d*w) {
-          avg2 += abs(128 - aData[i]);
+          avg2 += abs(aData[i] - 128);
           const y = aData[i] * $c.height / 256;
           c.lineTo(x, y);
         }
@@ -1211,10 +1210,10 @@ const visualizer = (()=>{
       }
       avg2 = clip01(avg2 / bufLen / 2 / 64);
     }
+    vol1 = avg1; vol2 = avg2;
     // vol1 is avg of the fft so it's smooth, avg2 is fast-responding
-    const color =
-      `hsl(${round(120*avg2)}deg, 100%, 50%, ${round(100*avg1)}%)`;
-    vizListeners.forEach(l => l(avg1.toFixed(3), avg2.toFixed(3), color));
+    const color = hsl(80*vol2, 100, 50, 100*vol1);
+    vizListeners.forEach(l => l(vol1.toFixed(3), vol2.toFixed(3), color));
   };
   return r;
 })();
