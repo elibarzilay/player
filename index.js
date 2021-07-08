@@ -53,7 +53,7 @@ const wheelToN = (e, n1, n2, dflt) =>
 ["selected", "player", "altitem", "dragitem"].forEach(prop => {
   let item; Object.defineProperty($, prop, {
     get: ()=> item,
-    set: elt => { if (item == elt) return;
+    set: elt => { if (item === elt) return;
                   if (item instanceof Element) item.classList.remove(prop);
                   item = elt;
                   if (item instanceof Element) item.classList.add(prop); } });
@@ -88,13 +88,14 @@ let all = {};
 
 const processData = data => {
   const p = dir => info => {
-    const isDir = info.type == "dir";
+    const isDir = info.type === "dir";
     info.path = dir + info.name + (isDir ? "/" : "");
-    info.name = (isDir ? (info.name == "" ? "All" : info.name)
-                       : info.name.replace(/[.]([^.]+)$/,
-                                           info.type != "other" ? "" : " ($1)"))
-                .replace(/^(\d+)-/, "$1. ")
-                .replace(/_/g, " ").replace(/-/g, " – ");
+    info.name =
+      (isDir ? (info.name === "" ? "All" : info.name)
+             : info.name.replace(/[.]([^.]+)$/,
+                                 info.type !== "other" ? "" : " ($1)"))
+        .replace(/^(\d+)-/, "$1. ")
+        .replace(/_/g, " ").replace(/-/g, " – ");
     if (isDir) {
       info.children.forEach(p(info.path));
       info.size = 1 + info.children.map(c => c.size || 1)
@@ -110,7 +111,7 @@ const processData = data => {
 
 const addLazyInfoProps = info => {
   addLazyProp(info, "elt", ()=> $(info.path));
-  if (info.type != "audio") return;
+  if (info.type !== "audio") return;
   const txt = x => x ? " " + x.replaceAll(/\//g, " ") : "";
   addLazyProp(info, "search", ()=>
     (info.path + "/" + txt(info.title) + txt(info.album) + txt(info.track)
@@ -123,7 +124,7 @@ const setAllExtras = ()=> {
   const loop = parent => parent.children.forEach(child => {
     child.parent = parent;
     if (last) child.preva = last; else firsts.push(child);
-    if (child.type == "audio") {
+    if (child.type === "audio") {
       if (!first) first = child;
       lasts.forEach(n => n.nexta = child); lasts.length = 0;
       last = child;
@@ -147,7 +148,7 @@ const infoMap = new WeakMap();
 const getInfo = elt => infoMap.get(elt);
 const getPath = elt => elt.id || getInfo(elt).path;
 const isMainItem = elt =>
-  elt == $main || (elt != $plist && (!!elt.id || elt == $main));
+  elt === $main || (elt !== $plist && (!!elt.id || elt === $main));
 
 const div = (parent, css = null, txt = null) => {
   const div = document.createElement("div");
@@ -158,14 +159,14 @@ const div = (parent, css = null, txt = null) => {
 };
 
 const renderItem = (elt, info, main) => {
-  if (info.type == "dir") elt = div(elt, "list");
+  if (info.type === "dir") elt = div(elt, "list");
   const item = div(elt, ["item", info.type], info.name);
   if (main) item.id = info.path;
   item.setAttribute("tabindex", 0);
   item.setAttribute("draggable", true);
   infoMap.set(item, info);
   addItemEvents(item, info);
-  if (info.type == "dir") {
+  if (info.type === "dir") {
     const subs = div(elt, "subs");
     info.children.forEach(c => renderItem(subs, c, main));
   }
@@ -177,7 +178,7 @@ const addItemEvents = (elt, info) => {
   elt.addEventListener("dragstart", dragStart);
   elt.addEventListener("dragend", dragEnd);
   elt.addEventListener("focus", ()=> {
-    if ($.selected && isMainItem(elt) != isMainItem($.selected))
+    if ($.selected && isMainItem(elt) !== isMainItem($.selected))
       [$.altitem, $.selected] = [$.selected, $.altitem];
     $.selected = elt;
   });
@@ -187,10 +188,10 @@ const addItemEvents = (elt, info) => {
 
 const $player = $("player");
 const play = (elt = $.selected) => {
-  if (typeof elt == "string") elt = $(elt);
+  if (typeof elt === "string") elt = $(elt);
   const info = getInfo(elt);
-  if (elt && info.type != "audio") elt = null;
-  if ($.player == elt) $player.currentTime = 0;
+  if (elt && info.type !== "audio") elt = null;
+  if ($.player === elt) $player.currentTime = 0;
   $.player = elt;
   const path = elt ? getPath(elt) : null;
   const doPlay = ()=> {
@@ -213,22 +214,22 @@ const setBackgroundImageLoop = s => {
 };
 const setBackgroundImage = (eltOrPath = $.player) => {
   if (!eltOrPath) return;
-  if (typeof eltOrPath == "string") setBackgroundImageLoop(imageExplicitTime);
+  if (typeof eltOrPath === "string") setBackgroundImageLoop(imageExplicitTime);
   else {
     const info = getInfo(eltOrPath).parent;
     if (!info.images) {
       info.images =
-        info.children.filter(n => n.type == "image").map(n => n.path);
+        info.children.filter(n => n.type === "image").map(n => n.path);
       info.curImages = [];
     };
     if (!info.images.length) eltOrPath = null;
-    if (info.images.length == 1) eltOrPath = info.images[0];
+    if (info.images.length === 1) eltOrPath = info.images[0];
     else {
       if (!info.curImages.length) info.curImages = shuffle(info.images);
       eltOrPath = info.curImages.pop();
     }
   }
-  if (unders[0].src == new URL(eltOrPath, document.baseURI).href) return;
+  if (unders[0].src === new URL(eltOrPath, document.baseURI).href) return;
   unders[0].style.opacity = "";
   [unders[1], unders[0]] = [...unders];
   unders[0].src = eltOrPath || blankPNG;
@@ -276,7 +277,7 @@ const playerPlay = ()=> {
   else $player.volume = $player.defaultVolume;
   return $player.play()
     .then(visualizer.start)
-    .catch(e => { if (e.code != e.ABORT_ERR) throw e; });
+    .catch(e => { if (e.code !== e.ABORT_ERR) throw e; });
 };
 const playerPlayPause = ({ctrlKey}) =>
     ctrlKey                           ? playerStop()
@@ -311,13 +312,13 @@ const trackSkip = dir => ({shiftKey, ctrlKey}) => {
 const playerNextPrev = down => {
   let item = $.player;
   if (!item) return;
-  if (document.activeElement == $search && isMainItem(item)) {
-    if (search.origin.elt == item || search.origin.type != "audio")
+  if (document.activeElement === $search && isMainItem(item)) {
+    if (search.origin.elt === item || search.origin.type !== "audio")
       searchNext(1, loopMode.on);
     item = search.origin && search.origin.elt;
   } else {
     do { item = nextItem(item, down, {wrap: loopMode.on}); }
-    while (item && item != $.player && getInfo(item).type != "audio");
+    while (item && item !== $.player && getInfo(item).type !== "audio");
   }
   play(item);
 };
@@ -331,7 +332,7 @@ $player.addEventListener("loadeddata", doLeftoverSkip);
 
 $player.info = null; // made up field
 const updateDisplays = info => {
-  if ($player.info != info) {
+  if ($player.info !== info) {
     $player.info = info;
     $player.src = info?.path || "";
   }
@@ -346,8 +347,7 @@ const updateDisplays = info => {
 
 const isItem   = elt => elt.classList.contains("item");
 const isHidden = elt => elt.offsetParent === null;
-const isTop    = elt => elt == $main || elt == $plist;
-const getTop   = elt => isTop(elt) ? elt : getTop(elt.parentElement);
+const isTop    = elt => elt === $main || elt === $plist;
 
 const nextItem = (elt, down, opts = {}) => {
   const {wrap = true, sub = true, different = false} = opts;
@@ -364,9 +364,9 @@ const nextItem = (elt, down, opts = {}) => {
     : isHidden(elt) ? loopUp(elt)
     : isItem(elt) ? elt
     : loopDn(xChild(elt));
-  const start  = (!sub && getInfo(elt).type == "dir") ? elt.parentElement : elt;
+  const start  = (!sub && getInfo(elt).type === "dir") ? elt.parentElement : elt;
   const result = loopUp(start);
-  return (!different || result != start) ? result : null;
+  return (!different || result !== start) ? result : null;
 };
 
 let timeRemaining = false;
@@ -381,7 +381,7 @@ const selectNext = (elt = $.selected, n = 0, opts) => {
   if (!elt) return;
   if (move && isMainItem(elt)) return;
   let result = null;
-  while (n != 0) {
+  while (n !== 0) {
     elt = nextItem(elt, n>0, opts);
     if (!elt) break; else result = elt;
     if (n > 0) n--; else n++;
@@ -393,59 +393,58 @@ const selectNext = (elt = $.selected, n = 0, opts) => {
     if (inSearch) $search.focus();
     return;
   }
-  const swap = result == result.parentElement.firstElementChild ? result
-             : result == result.parentElement.lastElementChild  ? null
-             : move == "up" ? result : result.nextElementSibling;
+  const swap = result === result.parentElement.firstElementChild ? result
+             : result === result.parentElement.lastElementChild  ? null
+             : move === "up" ? result : result.nextElementSibling;
   result.parentElement.insertBefore($.selected, swap);
 };
 const selectEdge = (n, opts) =>
   selectNext(($.selected && !isMainItem($.selected)) ? $plist : $main, n, opts);
 
 const expandDir = (info = getInfo($.selected), expand = "??", focus = true) => {
-  let elt = info.elt;
-  if (expand == "toggle")
-    expand = elt.parentElement.classList.contains("open")
+  let elt = info.elt, parent = elt.parentElement;;
+  if (expand === "toggle")
+    expand = parent.classList.contains("open")
              && !elt.nextElementSibling.classList.contains("only")
              ? false : "??";
-  if (expand == "??")
+  if (expand === "??")
     expand = info.size > autoExpandItems || "deep";
   if (expand) {
-    if (info.type != "dir") return;
-    if (elt.parentElement.classList.contains("open")
-        && elt.nextElementSibling.classList.contains("only")) {
+    if (info.type !== "dir") return;
+    if (parent.classList.contains("open"))
       elt.nextElementSibling.classList.remove("only");
-    }
-    elt.parentElement.classList.add("open");
-    if (expand == "deep")
-      for (const e of elt.parentElement.querySelectorAll(".list"))
-        e.classList.add("open");
+    parent.classList.add("open");
+    if (expand === "deep")
+      [...parent.getElementsByClassName("list")].forEach(e =>
+        e.classList.add("open"));
     if (focus) selectNext(elt, 1);
   } else {
-    if (info.type != "dir") {
-      elt = elt.parentElement.previousElementSibling;
-    } else if (isHidden(elt.nextElementSibling)) {
-      elt = elt.parentElement.parentElement.previousElementSibling;
-    }
+    if (info.type !== "dir")
+      elt = parent.previousElementSibling;
+    else if (isHidden(elt.nextElementSibling))
+      elt = parent.parentElement.previousElementSibling;
+    parent = elt.parentElement;
     if (focus) elt.focus();
-    elt.parentElement.classList.remove("open");
-    for (const e of elt.parentElement.querySelectorAll(".list"))
-      e.classList.remove("open");
+    parent.classList.remove("open");
+    [...parent.getElementsByClassName("open")].forEach(e =>
+      e.classList.remove("open"));
   }
 };
 
 const showOnly = (info = getInfo($.selected), focus = true) => {
   const elt0 = $.selected = info.elt;
-  if (info.type != "dir") info = info.parent;
+  if (info.type !== "dir") info = info.parent;
   let elt = info.elt;
   const toSelect = elt.parentElement.classList.contains("only")
                    && nextItem(elt, true);
-  for (const qs of ["open", "only"])
-    for (const e of $main.querySelectorAll("." + qs)) e.classList.remove(qs);
+  for (const e of new Set(["open", "only"]
+                          .flatMap(c => [...$main.getElementsByClassName(c)])))
+    e.classList.remove("open", "only");
   expandDir(info, U, focus);
   do {
     elt = elt.parentElement; elt.classList.add("open", "only");
     elt = elt.parentElement; elt.classList.add("only");
-  } while (elt != $main);
+  } while (elt !== $main);
   if (!focus) return;
   if (toSelect) return toSelect.focus();
   const f = elt0 && nextItem(elt0, true); if (f) return f.focus();
@@ -453,15 +452,15 @@ const showOnly = (info = getInfo($.selected), focus = true) => {
 
 const mainOrPlistOp = (e, elt = $.selected, info = getInfo(elt)) => {
   stopEvent(e);
-  if (e.ctrlKey && info.type != "dir" && info.type != "audio")
+  if (e.ctrlKey && info.type !== "dir" && info.type !== "audio")
     return window.open(info.path, "_blank");
   (e.ctrlKey ? plistOp : mainOp)(e, elt, info);
 };
 
 const mainOp = (e, elt = $.selected, info = getInfo(elt)) =>
-  info.type == "dir" ? (e.shiftKey ? expandDir(U, "toggle") : showOnly(info)) :
-  info.type == "audio" ? play(elt) :
-  info.type == "image" ? setBackgroundImage(info.path) :
+  info.type === "dir" ? (e.shiftKey ? expandDir(U, "toggle") : showOnly(info)) :
+  info.type === "audio" ? play(elt) :
+  info.type === "image" ? setBackgroundImage(info.path) :
   window.open(info.path, "_blank");
 
 const bindings = new Map(), bind = (keys, op, filter) =>
@@ -479,7 +478,7 @@ const notCtrl = e => !e.ctrlKey;
 const switchMain = ()=> $.altitem && $.altitem.focus();
 
 const plistOp = (e, elt = $.selected, info = getInfo(elt), dragTo) => {
-  if (elt == $main) return;
+  if (elt === $main) return;
   const drag = e instanceof DragEvent && $drag;
   if (drag && !isMainItem(elt))
     return $plist.insertBefore($drag, dragTo);
@@ -492,12 +491,12 @@ const plistOp = (e, elt = $.selected, info = getInfo(elt), dragTo) => {
     ? info => $plist.insertBefore(renderItem($plist, info, false), dragTo)
     : info => renderItem($plist, info, false);
   const add = info =>
-    info.type == "dir"     ? info.children.forEach(add)
-    : info.type != "audio" ? U
-    : $.player == info.elt ? $.player = $.altitem = render(info)
-    : $.altitem            ? render(info)
-    : $.player             ? $.altitem = render(info)
-    :                        play($.altitem = render(info));
+    info.type === "dir"     ? info.children.forEach(add)
+    : info.type !== "audio" ? U
+    : $.player === info.elt ? $.player = $.altitem = render(info)
+    : $.altitem             ? render(info)
+    : $.player              ? $.altitem = render(info)
+    :                         play($.altitem = render(info));
   add(info);
   if (e instanceof KeyboardEvent)
     selectNext(U, +1, {wrap: false, sub: false});
@@ -513,13 +512,13 @@ const plistDelete = backOrElt => {
     : item.nextElementSibling || item.previousElementSibling || $.altitem;
   const [prev, next] = [false, true].map(d =>
     nextItem(toDelete, d, {different: true}));
-  if (toDelete == $.player) {
+  if (toDelete === $.player) {
     $.player = {previousElementSibling: prev, nextElementSibling: next};
     infoMap.set($.player, getInfo(toDelete));
   } else if ($.player && !($.player instanceof Element)) {
-    if ($.player.nextElementSibling == toDelete)
+    if ($.player.nextElementSibling === toDelete)
       $.player.nextElementSibling = next;
-    if ($.player.previousElementSibling == toDelete)
+    if ($.player.previousElementSibling === toDelete)
       $.player.previousElementSibling = prev;
   }
   toDelete.remove();
@@ -538,7 +537,7 @@ const dragEnd = e => $drag = null;
 const addDragEvents = (elt, op, dragOK = null) => {
   let count = 0;
   const YtoElt = e => {
-    if (e.target != $plist) {
+    if (e.target !== $plist) {
       return e.offsetY >= e.target.offsetHeight/2
              ? e.target.nextElementSibling : e.target;
     } else {
@@ -551,22 +550,22 @@ const addDragEvents = (elt, op, dragOK = null) => {
     $drag && (!dragOK || dragOK(e)) && (stopEvent(e), handler(e));
   let oLast = 0;
   elt.addEventListener("dragover", dragHandle(e => {
-    if (elt != $plist) return;
+    if (elt !== $plist) return;
     if (e.timeStamp - oLast <= 100) return; else oLast = e.timeStamp;
     const di = YtoElt(e);
     if (di) { $.dragitem = di; $.dragitem.classList.remove("bottom"); }
     else if ($.dragitem = $plist.lastElementChild)
       $.dragitem.classList.add("bottom");
-    if (di == $plist.firstElementChild)     plist.scrollTop -= 1;
-    else if (di == $plist.lastElementChild) plist.scrollTop += 1;
+    if (di === $plist.firstElementChild)     plist.scrollTop -= 1;
+    else if (di === $plist.lastElementChild) plist.scrollTop += 1;
   }));
   elt.addEventListener("dragenter", dragHandle(e =>
-    count++ == 0 && elt.classList.add("drag-to")));
+    count++ === 0 && elt.classList.add("drag-to")));
   elt.addEventListener("dragleave", dragHandle(e =>
-    --count == 0 && elt.classList.remove("drag-to")));
+    --count === 0 && elt.classList.remove("drag-to")));
   elt.addEventListener("drop", dragHandle(e => {
     count = 0; elt.classList.remove("drag-to");
-    op(e, $drag, U, elt == $plist ? YtoElt(e) : U);
+    op(e, $drag, U, elt === $plist ? YtoElt(e) : U);
     $drag = null;
     $.dragitem = null;
   }));
@@ -611,7 +610,7 @@ bind("/", ()=> initiateSearch(), notCtrl);
 bind("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(l => "Key"+l),
      initiateSearch, notCtrl);
 
-bind(["Backspace", "Delete"], e => plistDelete(e.key == "Backspace"));
+bind(["Backspace", "Delete"], e => plistDelete(e.key === "Backspace"));
 
 bind("+", ()=> expandDir(U, true),   notCtrl);
 bind("-", ()=> expandDir(U, false),  notCtrl);
@@ -730,14 +729,14 @@ const updateTimes = ()=> {
     return;
   }
   const path = $player.info?.path || "";
-  if (updateTimes.shownPath != path && $player.duration) {
+  if (updateTimes.shownPath !== path && $player.duration) {
     updateTimes.shownPath = path;
     $dur.innerText = formatTime(round($player.duration));
   }
   let t = $player.currentTime;
   if (timeRemaining) t = $player.duration - t;
   t = round(t);
-  if (updateTimes.shownTime != t) {
+  if (updateTimes.shownTime !== t) {
     updateTimes.shownTime = t;
     $time.innerText = (timeRemaining ? "-" : "") + formatTime(t);
   }
@@ -755,7 +754,7 @@ const infoDisplay = (()=>{
       textDiv.innerText = text;
       moveTo = infoDiv.offsetWidth - textDiv.scrollWidth;
     }
-    if (textDiv.innerText == "" && state == NEWTEXT) return;
+    if (textDiv.innerText === "" && state === NEWTEXT) return;
     textDiv.style.transition = `left ${time}s ${fun || "ease-in-out"}`;
     textDiv.style.left = `${x}px`;
     state = st;
@@ -986,15 +985,15 @@ const showSearch = (origin = search.origin) => {
   let n0 = search.origin = origin;
   $search.classList.remove("found", "not-found");
   if (!search.ok) return removeSearch();
-  if (n0.type != "audio") n0 = n0.nexta;
+  if (n0.type !== "audio") n0 = n0.nexta;
   const ok = search.ok, fst = all.nexta;
   let n = n0, results = [], later;
   do {
-    if (n == fst) { later = results; results = []; }
+    if (n === fst) { later = results; results = []; }
     const r = ok(n.search);
     n.elt.classList.toggle("found", r);
     if (r) results.push(n);
-  } while ((n = n.nexta) != n0);
+  } while ((n = n.nexta) !== n0);
   later.forEach(x => results.push(x));
   $search.classList.add(results.length > 0 ? "found" : "not-found");
   search.results = results;
@@ -1005,10 +1004,10 @@ const showSearch = (origin = search.origin) => {
 // const nextSearchTrack = down => {
 //   if (!search.ok || !$.player) return;
 //   const len = search.results.length;
-//   if (len == 0) return;
+//   if (len === 0) return;
 //   const cur = search.results.indexOf(getInfo($.player));
 //   if (cur >= 0) return search.results[mod(cur + (down ? +1 : -1), len)].elt;
-//   if (search.origin && search.origin.type == "audio")
+//   if (search.origin && search.origin.type === "audio")
 //     return search.origin.elt;
 //   return search.results[0].elt;
 // };
@@ -1016,7 +1015,7 @@ const showSearch = (origin = search.origin) => {
 const searchNext = (delta, wrap = true) => {
   if (!search.ok) return;
   const len = search.results.length;
-  if (len == 0) return;
+  if (len === 0) return;
   if (wrap) search.cur = mod(search.cur + delta, len);
   else {
     search.cur += delta;
@@ -1027,7 +1026,7 @@ const searchNext = (delta, wrap = true) => {
 
 const showCurSearch = ()=> {
   const len = search.results.length;
-  if (len == 0 || search.cur == null) return null;
+  if (len === 0 || search.cur === null) return null;
   const cur = search.results[search.cur];
   isHidden(cur.elt) ? showOnly(cur, false) : $.selected = cur.elt;
   cur.elt.scrollIntoView(
@@ -1042,11 +1041,11 @@ const removeSearch = ()=> {
 };
 
 const search = e => {
-  if (e.type == "blur") {
+  if (e.type === "blur") {
     if (e.relatedTarget) { search.blurTime = null; return removeSearch(); }
     else { search.blurTime = e.timeStamp; return $search.focus(); }
   }
-  if (e.type == "focus") {
+  if (e.type === "focus") {
     if (search.blurTime && (e.timeStamp - search.blurTime) < 200)
       return search.blurTime = null;
     showSearch(getInfo($.selected));
@@ -1054,9 +1053,9 @@ const search = e => {
     $search.value = search.initial; search.initial = null;
   }
   const searchStr = $search.value.toLowerCase().trim().replace(/\s+/g, " ");
-  if (search.last == searchStr) return; else search.last = searchStr;
+  if (search.last === searchStr) return; else search.last = searchStr;
   const searchStrs = searchStr.split(" ");
-  search.ok = searchStr == "" ? null : mkSearcher(searchStr);
+  search.ok = searchStr === "" ? null : mkSearcher(searchStr);
   if (search.timer) clearTimeout(search.timer);
   search.timer = setTimeout(()=> { search.timer = null; showSearch(); }, 250);
 };
@@ -1070,10 +1069,10 @@ const searchKey = e => {
     return;
   e.stopImmediatePropagation();
   if (["Escape", "Tab"].includes(key)) $.selected.focus();
-  else if (key == "ArrowUp")   searchNext(-1);
-  else if (key == "ArrowDown") searchNext(+1);
-  else if (key == "PageUp")    searchNext(-pgSize, false);
-  else if (key == "PageDown")  searchNext(+pgSize, false);
+  else if (key === "ArrowUp")   searchNext(-1);
+  else if (key === "ArrowDown") searchNext(+1);
+  else if (key === "PageUp")    searchNext(-pgSize, false);
+  else if (key === "PageDown")  searchNext(+pgSize, false);
   else return;
   e.preventDefault();
 };
@@ -1237,8 +1236,8 @@ const mkFlashyWindow = ()=> {
 // ---- initialization --------------------------------------------------------
 
 // Hack these to fit to right side of parent
-for (let elt of document.querySelectorAll(".fill-right"))
-  elt.style.width = (elt.parentElement.offsetWidth - elt.offsetLeft - 16)+"px";
+[...document.getElementsByClassName("fill-right")].forEach(e =>
+  e.style.width = (e.parentElement.offsetWidth - e.offsetLeft - 16)+"px");
 
 const init = data => {
   all = data;
@@ -1250,7 +1249,7 @@ const init = data => {
 };
 
 fetch("info", { method: "HEAD" })
-  .then(r => localStorage.date == r.headers.get("last-modified")
+  .then(r => localStorage.date === r.headers.get("last-modified")
              && localStorage.all
              ? init(JSON.parse(localStorage.all))
              : (delete localStorage.all,
