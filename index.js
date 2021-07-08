@@ -116,7 +116,7 @@ const addLazyInfoProps = info => {
   addLazyProp(info, "search", ()=>
     (info.path + "/" + txt(info.title) + txt(info.album) + txt(info.track)
      + txt(info.date) + txt(info.artist))
-    .replaceAll(/[ _]+/g, " ").toLowerCase());
+    .replace(/[ _]+/g, " ").toLowerCase());
 };
 
 const setAllExtras = ()=> {
@@ -831,55 +831,15 @@ $wave.addEventListener("mousedown", e => {
 
 // ---- search function -------------------------------------------------------
 
-const mkSearcher = (str, {sep = "/", pfxSep = true, sfxSep = false} = {}) => {
+const mkSearcher = str => {
   const escape = str => str.replace(/[.*+?^${}()|\[\]\\]/g, "\\$&");
-  const seprx = escape(sep);
-  const word2rx = str =>
-    RegExp(str.split("").map(escape).join(`[^ ${seprx}]*`), "iug");
-  const words = str =>
-    str.split(/ +/).filter(s => s.length).map(word2rx);
-  const seps = str =>
-    str.trim().split(sep).map(s => words(s.trim()));
-  str = str.trim();
-  if (!str.length) return str => true;
-  pfxSep &&= str.startsWith(sep) && RegExp(`^ *${seprx}`, "iug");
-  if (pfxSep) str = str.slice(1);
-  if (!str.length) return str => pfxSep.test(str);
-  sfxSep &&= str.endsWith(sep) && RegExp(`${seprx} *$`, "iug");
-  if (sfxSep) str = str.slice(0,-1);
-  const rxss = str.length ? seps(str) : [];
-  const last = rxss[rxss.length-1];
-  if (!last.length) rxss.length--;
-  const rxsep = RegExp(seprx, "iug");
-  return inp => {
-    let pos = 0;
-    if (pfxSep) {
-      pfxSep.lastIndex = pos;
-      if (!pfxSep.exec(inp)) return false;
-      else pos = pfxSep.lastIndex;
-    }
-    for (const rxs of rxss) {
-      if (rxs.length) {
-        const poss = rxs.map(rx =>
-          (rx.lastIndex = pos, (rx.exec(inp) ? rx.lastIndex : -1)));
-        if (poss.some(p => p < 0)) return false;
-        pos = max(...poss);
-        if (pos < 0) return false;
-        if (rxs === last) break;
-      }
-      rxsep.lastIndex = pos;
-      if (!rxsep.exec(inp)) return false;
-      pos = rxsep.lastIndex;
-    }
-    if (sfxSep) {
-      sfxSep.lastIndex = pos;
-      if (!sfxSep.exec(inp)) return false;
-    }
-    return true;
-  };
+  const rx = RegExp(
+    [...str.trim().matchAll(/\w+|\W/g)]
+      .map(m => m[0]).filter(s => s !== " ")
+      .map(s => s.length === 1 ? escape(s) : s.split("").join("\\w*"))
+      .join(".*"));
+  return inp => rx.test(inp);
 };
-
-
 /*
 (()=>{
   let n = 0, sec = "", fails = [], ok = ()=>{};
@@ -911,31 +871,41 @@ const mkSearcher = (str, {sep = "/", pfxSep = true, sfxSep = false} = {}) => {
   search(" foo  bar ");
   t("foo bar");
   f("foo");
-  t(" bar foo ");
-  t("barfoo");
+  f(" bar foo ");
+  f("barfoo");
   t("foobar");
-  t("bafoor");
-  t("fobaro");
-  t("fboaor");
-  t("bfaoro");
-  t("bar.foo");
+  f("bafoor");
+  f("fobaro");
+  f("fboaor");
+  f("bfaoro");
+  t("foo.bar");
+  f("bar.foo");
   f("rab oof");
+  t("foo-bar");
   t("foo/bar");
   t("foo / bar");
   t("/foo bar");
-  t("bar foo/");
-  t("///bar foo///");
-  t("///bar/foo///");
+  f("bar foo/");
+  t("foo bar/");
+  f("///bar foo///");
+  t("///foo bar///");
+  f("///bar/foo///");
+  t("///foo/bar///");
   search(" / foo  bar ");
   f("foo bar");
   f(" foo bar ");
   t("/foo bar");
-  t("/ bar foo ");
-  t(" / bar foo ");
-  t("/barfoo");
+  t("/ foo bar ");
+  f("/ bar foo ");
+  t(" / foo bar ");
+  f(" / bar foo ");
   t("/foobar");
-  t("/xbfaorox");
-  t("/bar.foo");
+  f("/barfoo");
+  t("/foobar");
+  t("/xfooxbarx");
+  f("/xbfaxorox");
+  t("/foo.bar");
+  f("/bar.foo");
   f("/rab oof");
   t("/foo // bar/");
   search(" / foo  bar / ");
@@ -944,9 +914,11 @@ const mkSearcher = (str, {sep = "/", pfxSep = true, sfxSep = false} = {}) => {
   f("/foo bar");
   f("/foo/bar");
   t("/foo/bar/");
-  t("/bar/foo/");
-  t("/bar/foo/xxx");
-  t("/bar/foo/x/x/x/");
+  f("/bar/foo/");
+  t("/foo/bar/xxx");
+  f("/bar/foo/xxx");
+  t("/foo/bar/x/x/x/");
+  f("/bar/foo/x/x/x/");
   t(" / foo / bar / ");
   t("/fxoxo/bxaxr/");
   t("/foo//bar/");
