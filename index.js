@@ -998,7 +998,10 @@ const searchNext = (delta, wrap = true) => {
 
 const showCurSearch = ()=> {
   const len = search.results.length;
-  if (len === 0 || search.cur === null) return null;
+  if (len === 0 || search.cur === null) {
+    $("result-number").innerText = "";
+    return null;
+  }
   const cur = search.results[search.cur];
   isHidden(cur.elt) ? showOnly(cur, false) : $.selected = cur.elt;
   cur.elt.scrollIntoView(
@@ -1035,9 +1038,8 @@ search.results = [];
 
 const searchKey = e => {
   const {key, code, shiftKey: shift, ctrlKey: ctrl} = e;
-  if (key === "Enter" || code === "Backslash"
-      || ((shift || ctrl) && (key === " " || code.startsWith("Numpad")))
-      || (ctrl            && code.startsWith("Digit")))
+  if (key === "Enter" || code === "Backslash" || code.startsWith("Numpad")
+      || ((shift || ctrl) && (key === " " || code.startsWith("Digit"))))
     return;
   e.stopImmediatePropagation();
   if (["Escape", "Tab"].includes(key)) $.selected.focus();

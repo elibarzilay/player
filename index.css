@@ -31,6 +31,8 @@ body.flashy .itemlist { background: var(--volcolor); }
 .subs.only > .item { display: none;  }
 .subs.only > .list.only { display: block;  }
 
+.subs { overflow-x: clip; } /* some rendering bug when search is focused? */
+
 .item { cursor: pointer; border-radius: 0.5ex; white-space: nowrap; }
 .item:focus { background: #8224; outline: none; }
 .item:hover { background: #4224; }
@@ -50,15 +52,15 @@ body.flashy .itemlist { background: var(--volcolor); }
   position: relative; color: #ff4; text-shadow: 2px 2px #000;
   transform: translateX(calc(10px * var(--volume1)))
              translate(-50%, 0%)
-             scale(calc(1 + 0.1 * var(--volume1)))
+             scale(calc(1 + 0.2 * var(--volume1)))
              translate(50%, 0%);
 }
 :root.bigviz .item.player {
   transform: translateX(calc(10px * var(--volume1)))
              translate(-50%, 0%)
-             scale(calc(1 + 0.1 * var(--volume1)))
+             scale(calc(1 + 0.3 * var(--volume1)))
              translate(15%, 0%)
-             rotate(calc(-2deg * (var(--volume2) - 0)))
+             rotate(calc(-4deg * var(--volume2)))
              translate(35%, 0%);
 }
 .item.player::after {
