@@ -275,7 +275,8 @@ const playerPlay = ()=> {
   if (!$player.info) return play();
   if ($player.currentTime > 0) fadeTo($player.defaultVolume);
   else $player.volume = $player.defaultVolume;
-  return $player.play()
+  return audio.resume()
+    .then(()=> $player.play())
     .then(visualizer.start)
     .catch(e => { if (e.code !== e.ABORT_ERR) throw e; });
 };
@@ -1104,7 +1105,8 @@ const audio = (()=>{
     devAudio.setSinkId(d.deviceId);
   };
   //
-  return { analyzers, setGain, showDevices, useDevice };
+  return { analyzers, setGain, showDevices, useDevice,
+           resume: c.resume.bind(c) };
 })();
 
 // ---- visualizations --------------------------------------------------------
