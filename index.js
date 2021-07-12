@@ -17,7 +17,7 @@ const $ = x => document.getElementById(x);
 const rec = f => f((...xs) => rec(f)(...xs));
 const { isArray } = Array;
 const { isFinite } = Number;
-const { round, floor, abs, max, min, random } = Math;
+const { round, floor, ceil, abs, max, min, random } = Math;
 const { now } = Date;
 const U = undefined;
 
@@ -71,6 +71,7 @@ const message = txt => {
 // desmos: 1-\cos\left(\frac{\pi}{2}\left(1-\operatorname{abs}\left(x-
 // \left\{-1\le x<1:\ 0,\ 1\le x<3:\ 2,\ 3\le x:4\right\}\right)\right)\right)
 const spike = n => 1 - Math.cos((Math.PI/2)*n);
+const antiSpike = n => Math.sin((Math.PI/2)*n);
 
 const hsl = (h, s, l, a) =>
   `hsl(${round(h)}deg, ${round(s)}%, ${round(l)}%, ${round(a)}%)`;
@@ -125,6 +126,7 @@ const setAllExtras = ()=> {
     child.parent = parent;
     if (last) child.preva = last; else firsts.push(child);
     if (child.type === "audio") {
+      child.duration = +child.duration;
       if (!first) first = child;
       lasts.forEach(n => n.nexta = child); lasts.length = 0;
       last = child;
@@ -193,17 +195,7 @@ const play = (elt = $.selected) => {
   if (elt && info.type !== "audio") elt = null;
   if ($.player === elt) $player.currentTime = 0;
   $.player = elt;
-  const path = elt ? getPath(elt) : null;
-  if (path && !("beats" in info)) {
-    info.beats = null;
-    const dur = info.duration = +info.duration;
-    fetch("/beats" + path.replace(/[.][^.]+$/, ".json"))
-      .then(x => x.ok && x.json())
-      .then(x => info.beats = x?.length && [
-        ...(x[0] > 0 ? [0] : []),
-        ...x,
-        ...(x[x.length-1] < dur ? [dur] : [])]);
-  }
+  if (info) fetchBeats(info);
   const doPlay = ()=> {
     $player.volume = $player.defaultVolume;
     if (!elt) return playerStop();
@@ -295,38 +287,30 @@ const playerPlayPause = ({ctrlKey}) =>
   : $player.paused || $player.pausing ? playerPlay()
   :                                     playerPause();
 
-$player.leftoverSkip = null; // made up field
-const doLeftoverSkip = ()=> {
-  if (!$player.leftoverSkip) return;
-  const t = $player.leftoverSkip; $player.leftoverSkip = null;
-  trackSkipTo(t > 0 ? t : $player.duration + t);
+$player.leftoverMove = null; // made up field
+const doLeftoverMove = ()=> {
+  if (!$player.leftoverMove) return;
+  const t = $player.leftoverMove; $player.leftoverMove = null;
+  playerMoveTo(t > 0 ? t : $player.duration + t);
 };
-const trackSkipTo = time => {
+const playerMoveTo = time => {
   if (!$player.info) return;
   if (time < 0) {
-    $player.leftoverSkip = time;
+    $player.leftoverMove = time;
     playerNextPrev(false);
   } else if (isFinite($player.duration) && time > $player.duration) {
-    $player.leftoverSkip = time - $player.duration;
+    $player.leftoverMove = time - $player.duration;
     playerNextPrev(true);
-  } else if (!$player.info.beats) {
-    $player.currentTime = time;
   } else {
-    // this needs to do much more: should register the switch on the time stamp
-    // so it's precise even if playing a different speeds; multiple movements
-    // should start from the last intended destination instead of where we are,
-    // to handle quick movements
-    setTimeout(()=>
-      $player.currentTime = findBeat(time, $player.info.beats),
-      1000 * (findBeat($player.currentTime, $player.info.beats, "next")
-              - $player.currentTime));
+    if (!beatMode.on) $player.currentTime = time;
+    else fetchBeats($player.info).then(beats.moveTo(time));
   }
 };
-const trackSkip = dir => ({shiftKey, ctrlKey}) => {
+const playerMove = dir => ({shiftKey, ctrlKey}) => {
   const delta = dir * (ctrlKey ? bigSkip : smallSkip)
                     / (shiftKey ? smallerSkipDiv : 1);
-  if ($player.leftoverSkip) $player.leftoverSkip += delta;
-  else trackSkipTo($player.currentTime + delta);
+  if ($player.leftoverMove) $player.leftoverMove += delta;
+  else playerMoveTo($player.currentTime + delta);
 };
 
 const playerNextPrev = down => {
@@ -348,7 +332,7 @@ const playerButtonsPlaying = playing =>
 $player.addEventListener("play",  ()=> playerButtonsPlaying(true));
 $player.addEventListener("pause", ()=> playerButtonsPlaying(false));
 $player.addEventListener("ended", ()=> playerNextPrev(true));
-$player.addEventListener("loadeddata", doLeftoverSkip);
+$player.addEventListener("loadeddata", doLeftoverMove);
 
 $player.info = null; // made up field
 const updateDisplays = info => {
@@ -428,7 +412,7 @@ const expandDir = (info = getInfo($.selected), expand = "??", focus = true) => {
              && !elt.nextElementSibling.classList.contains("only")
              ? false : "??";
   if (expand === "??")
-    expand = info.size > autoExpandItems || "deep";
+    expand = info.size > autoExpandItems+1 || "deep";
   if (expand) {
     if (info.type !== "dir") return;
     if (parent.classList.contains("open"))
@@ -617,6 +601,7 @@ const bigvizMode = mkToggle("bigviz", on =>
 const flashyMode = mkToggle("flashy",
   on => document.body.classList.toggle("flashy", on),
   e => e?.shiftKey && (mkFlashyWindow(), true));
+const beatMode   = mkToggle("beatmode");
 
 // ---- player interactions ---------------------------------------------------
 
@@ -638,6 +623,7 @@ bind("*", ()=> expandDir(U, "deep"), notCtrl);
 
 bind("\\", bigvizMode);
 bind("|",  ()=> flashyMode()); // avoid shift opening a window
+bind(".",  beatMode);
 
 bind("ArrowUp",   e => selectNext(U, -1, {move: e.ctrlKey}));
 bind("ArrowDown", e => selectNext(U, +1, {move: e.ctrlKey}));
@@ -647,15 +633,15 @@ bind("Home",      e => selectEdge(+1, {move: e.ctrlKey}));
 bind("End",       e => selectEdge(-1, {move: e.ctrlKey}));
 
 bind([" ", "Numpad5"], playerPlayPause);
-bind("ArrowLeft",      trackSkip(-1));
-bind("ArrowRight",     trackSkip(+1));
+bind("ArrowLeft",      playerMove(-1));
+bind("ArrowRight",     playerMove(+1));
 [[null,      "p-pause", "pause",         playerPause],
  [null,      "p-play",  "play",          playerPlay],
  [null,      "p-stop",  "stop",          playerStop],
  ["Numpad4", "p-prev",  "previoustrack", ()=> playerNextPrev(false)],
  ["Numpad6", "p-next",  "nexttrack",     ()=> playerNextPrev(true)],
- ["Numpad1", "p-rew",   "seekbackward",  trackSkip(-2)],
- ["Numpad3", "p-fwd",   "seekbackward",  trackSkip(+2)],
+ ["Numpad1", "p-rew",   "seekbackward",  playerMove(-2)],
+ ["Numpad3", "p-fwd",   "seekbackward",  playerMove(+2)],
 ].forEach(([key, id, media, handler]) => {
   if (key)   bind(key, handler);
   if (id)    $(id).addEventListener("click", handler);
@@ -669,12 +655,14 @@ const markerJump = e => {
   if (ctrl) {
     let m = markers.get($player.info);
     if (!m) markers.set($player.info, m = new Array(10));
-    m[n] = $player.currentTime + 0.015; // reaction time
+    const target = $player.currentTime - 0.015; // reaction time
+    m[n] = beatMode.on && beats.nextBeatTime(target) || $player.currentTime;
   } else { // defaults to a spread of 10 markers (youtube-style)
-    $player.currentTime =
+    const newTime =
       markers.get($player.info)?.[n]
       || (isFinite($player.duration) ? n * $player.duration / 10
           : $player.currentTime);
+    playerMoveTo(newTime);
   }
 };
 bind("0123456789".split("").map(d => "Digit"+d), markerJump);
@@ -735,29 +723,9 @@ $gain.addEventListener("wheel", e => {
 
 // mouse wheel for convenient song navigation
 $("control-panel").addEventListener("wheel", e =>
-  trackSkip(wheelToN(e, 0.5, 1, U))(e));
+  playerMove(wheelToN(e, 0.5, 1, U))(e));
 
 // ---- time display ----------------------------------------------------------
-
-// const tick = ()=>
-//   (tick.sound ??= new Audio("/.player/beats/tick.wav")).play();
-
-const drawBeat = (()=>{
-  let d = null, s = null;
-  return beat => {
-    if (!d) {
-      d = document.createElement("div"), s = d.style;
-      s.position = "fixed"; s.pointerEvents = "none";
-      s.right = s.bottom = "0"; s.width = s.height = "100%";
-      s.borderRadius = "50%";
-      document.body.append(d);
-    }
-    if (!beat) return s.display = "none";
-    s.display = "";
-    s.backgroundColor = `hsla(60, 100%, 50%, ${beat})`;
-    s.width = s.height = `${beat*100}%`;
-  };
-})();
 
 const updateTimes = ()=> {
   const $dur = $("dur"), $time = $("time");
@@ -766,6 +734,7 @@ const updateTimes = ()=> {
     updateTimes.shownTime = null;
     updateTimes.shownPath = null;
     $dur.innerText = $time.innerText = "–:––";
+    beats.update(null);
     return;
   }
   const path = $player.info?.path || "";
@@ -774,8 +743,7 @@ const updateTimes = ()=> {
     $dur.innerText = formatTime(round($player.duration));
   }
   let t = $player.currentTime;
-  const beats = $player.info?.beats;
-  drawBeat(beats?.length ? spike(spike(findBeat(t, beats, "beat"))) : null);
+  beats.update(t);
   if (timeRemaining) t = $player.duration - t;
   t = round(t);
   if (updateTimes.shownTime !== t) {
@@ -858,7 +826,7 @@ $wave.addEventListener("mousedown", e => {
     const dur = $player.duration;
     if (isNaN(dur)) return;
     const rect = $wave.getBoundingClientRect();
-    $player.currentTime = dur * clip01((e.clientX-rect.left) / rect.width);
+    playerMoveTo(dur * clip01((e.clientX-rect.left) / rect.width));
     drawPlayerLine();
   };
   stopEvent(e);
@@ -1161,11 +1129,6 @@ const visualizer = (()=>{
   r.addListener = l => vizListeners.add(l);
   r.delListener = l => vizListeners.delete(l);
   const rootS = document.documentElement.style;
-  vizListeners.add((vol1, vol2, col) => {
-    rootS.setProperty("--volume1", vol1);
-    rootS.setProperty("--volume2", vol2);
-    rootS.setProperty("--volcolor", col);
-  });
   $c.addEventListener("click", bigvizMode);
   const c = $c.getContext("2d");
   const clear = r.clear = ()=> c.clearRect(0, 0, $c.width, $c.height);
@@ -1176,7 +1139,6 @@ const visualizer = (()=>{
     c.globalCompositeOperation = "source-over";
   };
   let playState = null; // null, true, or time we started to pause
-  let vol1 = 0, vol2 = 0; // available from last draw
   r.start = ()=> { if (playState === null) { playState = true; draw(); } };
   const draw = ()=> {
     if (!playState) return;
@@ -1191,24 +1153,24 @@ const visualizer = (()=>{
     if ($c.height !== $c.clientHeight) $c.height = $c.clientHeight;
     updateTimes();
     fade("#0004");
-    const w = $c.width / bufLen / 2;
+    const W = $c.width, H = $c.height, w = W / bufLen / 2;
     let avg1 = 0, avg2 = 0;
     if (!fftvizMode.on) avg1 = 0.5; else {
-      const c1 = hsl(-80*vol2, 100, 75*vol1,     75);
-      const c2 = hsl( 80*vol2, 100, 75*vol1+25, 100);
+      const c1 = hsl(-80*r.vol2, 100, 75*r.vol1,     75); // values from
+      const c2 = hsl( 80*r.vol2, 100, 75*r.vol1+25, 100); // last round
       for (const side of SIDES) {
-        const d = 1.25 * (side === 0 ? -1 : +1); // wider since highs are 0
+        const d = side === 0 ? -1 : +1;
         analyzers[side].getByteFrequencyData(aData);
-        for (let i = 0, x = $c.width / 2; i < bufLen; i++, x += d*w) {
+        for (let i = 0, x = W / 2; i < bufLen; i++, x += d*w) {
           avg1 += aData[i];
-          const rx = round(x), rw = round(d*w);
-          const barHeight = aData[i] * $c.height / 256;
+          const rx = round(x), rw = round(d*w+d);
+          const barHeight = aData[i] * H / 256;
           c.fillStyle = c1;
-          c.fillRect(rx, $c.height/2 - barHeight/2, rw, barHeight);
+          c.fillRect(rx, (H-barHeight) / 2, rw, barHeight);
           const inner = barHeight/4 - 10;
           if (inner > 0) {
             c.fillStyle = c2;
-            c.fillRect(rx, $c.height/2 - inner, rw, 2*inner);
+            c.fillRect(rx, H/2 - inner, rw, 2*inner);
           }
         }
       }
@@ -1221,20 +1183,23 @@ const visualizer = (()=>{
         const d = side === 0 ? -1 : +1;
         analyzers[side].getByteTimeDomainData(aData);
         c.beginPath();
-        for (let i = 0, x = $c.width / 2; i < bufLen; i++, x += d*w) {
+        for (let i = 0, x = W / 2; i < bufLen; i++, x += d*w) {
           avg2 += abs(aData[i] - 128);
-          const y = aData[i] * $c.height / 256;
+          const y = aData[i] * H / 256;
           c.lineTo(x, y);
         }
         c.stroke();
       }
       avg2 = clip01(avg2 / bufLen / 2 / 64);
     }
-    vol1 = avg1; vol2 = avg2;
+    r.vol1 = avg1; r.vol2 = avg2;
+    rootS.setProperty("--volume1",  avg1.toFixed(3));
+    rootS.setProperty("--volume2",  avg2.toFixed(3));
     // vol1 is avg of the fft so it's smooth, avg2 is fast-responding
-    const color = hsl(80*vol2, 100, 50, 100*vol1);
-    vizListeners.forEach(l => l(vol1.toFixed(3), vol2.toFixed(3), color));
+    rootS.setProperty("--volcolor", r.col = hsl(80*avg2, 100, 50, 100*avg1));
+    vizListeners.forEach(l => l());
   };
+  r.vol1 = r.vol2 = 0; r.col = "black";
   return r;
 })();
 
@@ -1244,7 +1209,7 @@ const mkFlashyWindow = ()=> {
     "resizable=1,scrollbars=0,menubar=0,toolbar=0,location=0,status=0");
   const body = win.document.body;
   body.parentElement.style.background = "#000";
-  const setbg = (vol1, vol2, col) => body.style.background = col;
+  const setbg = ()=> body.style.background = visualizer.col;
   setbg("#000");
   visualizer.addListener(setbg);
   win.addEventListener("unload", ()=> visualizer.delListener(setbg));
@@ -1252,55 +1217,126 @@ const mkFlashyWindow = ()=> {
 
 // ---- experimental beat detection -------------------------------------------
 
-const findBeat = (t, bs, mode = null) => {
-  const next = mode === "next", beat = mode === "beat";
-  if (!bs || !bs.length) return beat ? 0 : t;
-  if (bs.length === 1) return beat ? 0 : bs[0];
-  let lo = beat ? 1 : 0, hi = bs.length - (beat ? 2 : 1), mid = 0;
-  if (t <= bs[lo]) return beat ? max(0, 1 - (bs[lo]-t)/(bs[lo]-bs[lo-1])) : bs[lo];
-  if (t >= bs[hi]) return beat ? max(0, 1 - (t-bs[hi])/(bs[hi+1]-bs[hi])) : bs[hi];
-  const between = (lo, hi) => beat
-    ? abs(2*t - lo - hi) / (hi - lo)
-    : next ? hi : t - lo <= hi - t ? lo : hi;
-  while (lo <= hi) {
-    mid = floor((lo + hi) / 2);
-    if (bs[mid] === t) return beat ? 1 : t;
-    if (mid === lo) return between(bs[lo], bs[hi]);
-    if (bs[mid] < t) lo = mid; else hi = mid;
+const fetchBeats = info => {
+  if ("beats" in info) return info.beatsPromise;
+  info.beats = null;
+  const beatsPath = "/beats" + info.path.replace(/[.][^.]+$/, ".json");
+  return info.beatsPromise = fetch(beatsPath)
+    .then(x => x.ok && x.json())
+    .then(x => (
+      info.beats = !x?.length ? null : [
+        ...(x[0] > 0 ? [0] : []),
+        ...x,
+        ...(x[x.length-1] < info.duration ? [info.duration] : [])],
+      info.beatsPromise = Promise.resolve(info.beats)));
+};
+
+const findBeatIndex = (t, bs, last = 0) => {
+  let lo = 0, hi = bs?.length;
+  if (!hi || hi === 1) return 0;
+  if (t >= bs[last]) {
+    if (last + 1 === hi || t < bs[last + 1]) return last;
+    if (last + 2 === hi || t < bs[last + 2]) return last + 1;
   }
-  return t; // shouldn't happen
+  if (t <= bs[lo]) return lo;
+  if (t >= bs[hi]) return hi;
+  while (lo < hi) {
+    const mid = ceil((lo + hi) / 2);
+    if (bs[mid] <= t) lo = mid; else hi = mid - 1;
+  }
+  return lo;
 };
 
 /*
-const beats = [0, 10, 20, 40, 60, 90], modes = [null, "next", "beat"];
-const pad = (n, s) => (" ".repeat(max(0, n - String(s).length))) + s;
-for (i = -10; i <= 100; i += 1) {
-  let f = mode => {
-    let r = findBeat(i, beats, mode); if (mode === "beat") r = spike(r);
-    let s = pad(3, round(r*10)/10);
-    return s + (mode !== "beat" ? "" : " #" + "#".repeat(round(r*100)));
+for (useLast of [0, 1, 2]) {
+  const test = (beats, times = 1000000) => {
+    const last = beats.length - 1, MIN = beats[0], MAX = beats[last];
+    let bi = 0;
+    const test = n => {
+      bi = findBeatIndex(n, beats,
+                         useLast === 0 ? undefined : useLast === 1 ? bi
+                         : floor(random()*beats.length));
+      const ok = last < 0 ? bi === 0
+            : n < beats[0] ? bi === 0
+            : n >= beats[last] ? bi === last
+            : beats[bi] <= n && n < beats[bi+1];
+      if (!ok) throw Error(`poof n=${n}, beats=[${beats.join(", ")}]`);
+    };
+    for (const b of beats) test(b);
+    for (let i = 0; i < times; i++) test(random()*(MAX-MIN+2) + MIN - 1);
   }
-  const line = `${pad(5,i.toFixed(1))}: ${modes.map(mode =>
-                 `${mode}: ${f(mode)}`).join("   ")}`;
-  console.log(beats.includes(i) ? line.replace(/ /g, "=") : line);
+  test([0, 10, 20, 40, 60, 90]);
+  test([0, 10, 20,     60, 90]);
+  test([0,     20,     60, 90]);
+  test([0,     20,     60    ]);
+  test([       20,     60    ]);
+  test([               60    ]);
+  const randomBeats = ()=> {
+    let r = [], n = 0;
+    while (random() <= 0.95) r.push(n += random());
+    return r;
+  }
+  for (let i = 0; i < 10000; i++) test(randomBeats(), 10000);
 }
 */
 
-const computeBeats = async (url = $player.src) => {
-  if (!window.MusicTempo) {
-    const s = document.createElement("script");
-    s.src = "/.player/beats/music-tempo.min.js";
-    document.head.append(s);
+const beats = (()=>{
+  //
+  // let tickSound = null;
+  // const tick = ()=> {
+  //   if (!tickSound) tickSound = new Audio("/.player/beats/tick.wav");
+  //   tickSound.volume = $player.volume / 2;
+  //   tickSound.play();
+  // }
+  //
+  let eltStyle = null, isShown = false;
+  const hide = ()=> {
+    if (isShown) { eltStyle.opacity = 0; isShown = false; }
   }
-  if (!url) { console.error("no url given"); return; }
-  const data = await (await fetch($player.src)).arrayBuffer();
-  const buff = await (new AudioContext()).decodeAudioData(data);
-  const buf0 = buff.getChannelData(0);
-  const buf1 = buff.getChannelData(buff.numberOfChannels > 1 ? 1 : 0);
-  const mt = window.mt = new MusicTempo(buf0.map((n0, i) => (n0 + buf1[i])/2));
-  console.log(mt.tempo);
-  console.log(`[${mt.beats.map(n => +n.toFixed(3)).join(",")}]`);
-};
+  const draw = ()=> {
+    if (!isShown) { eltStyle.opacity = 1; isShown = true; }
+    const R = antiSpike(1 - abs(2*beat01 - 1)) * (beat % 2 ? 60 : -60);
+    eltStyle.transform = `rotate(${R}deg)`;
+    const L = spike(1 - beat01);
+    eltStyle.backgroundColor = hsl(120, 100, L * visualizer.vol1 * 80, 50);
+  };
+  //
+  let lastBeats = null, beats = null, beat = 0, beat01 = 0, beatMove = null;
+  const update = curTime => {
+    if (!eltStyle) eltStyle = $("beat").style;
+    const info = $player.info;
+    beats = info?.beats;
+    if (!beats || $player.paused || curTime === null) {
+      beat = beat01 = 0, beatMove = null; return hide();
+    }
+    if (beats != lastBeats) {
+      lastBeats = beats, beat = beat01 = 0, beatMove = null;
+    }
+    const newBeat = findBeatIndex(curTime, beats, beat);
+    if (newBeat != beat) {
+      beat = newBeat;
+      // tick();
+      if (beatMove !== null) {
+        $player.currentTime = beats[beat = beatMove];
+        beatMove = null;
+      }
+    }
+    beat01 = beat < 0 ? 0 : beat >= beats.length - 1 ? 0
+           : (curTime - beats[beat]) / (beats[beat + 1] - beats[beat]);
+    draw();
+  };
+  const nextBeatTime = t =>
+    beats[clipRange(0, findBeatIndex(t, beats, beat) + 1, beats.length - 1)];
+  // moves are unused
+  const move = n => beatMove = clipRange(0, beat + n, beats.length - 1);
+  const moveTo = t => {
+    const b = findBeatIndex(t, beats);
+    beatMove = b >= beats.length - 1 ? beats.length - 1
+             : beats[b + 1] - t > t - beats[b] ? b : b + 1;
+  };
+  const X = { update, nextBeatTime, move, moveTo };
+  return X;
+})();
 
 // ---- initialization --------------------------------------------------------
 

@@ -164,6 +164,18 @@ body.flashy .control { background: var(--volcolor); }
 #time { border-bottom: 1px solid var(--fg); }
 #dur  { border-top:    1px solid var(--fg); }
 
+#beatmode {
+  background: #226; border-radius: 50%; width: 1ex;
+  position: fixed; right: 1ex; bottom: 0.5ex;
+  line-height: 1em; text-align: center;
+  font-size: 300%; transition: font-size 0.3s, filter 0.3s;
+}
+#beatmode.on { font-size: 800%; }
+#beat {
+  transform-origin: 50% 70%; border-radius: 50%; pointer-events: none;
+  background: #228c; color: #ff0c; opacity: 0;
+}
+
 #search-panel {
   left: var(--page-margin); padding: 0.5ex 1em;
   width: calc(49vw - var(--page-margin) - 2em);
