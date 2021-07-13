@@ -4,12 +4,24 @@
 # for a in **/*.mp3; do
 #   ffmpeg -i "$a" -acodec copy xxx.mp3 && mv xxx.mp3 "$a"; done
 
-here="$(cd $(dirname "$0"); pwd)"
-cd "$here/.."; music="$(pwd)"
-images="$here/images" image_size="480,80"
+infodir="$(cd $(dirname "$0"); pwd)"
+musicdir="$(cd "$infodir/.."; pwd)"
+imagesdir="$infodir/images"
+beatsdir="$infodir/beats"
+mkdir -p "$imagesdir" "$beatsdir"
+image_size="480,80"
 shopt -s nullglob
+cd "$musicdir"
+
+set -eu
 
 failwith() { printf '[%s] %s\n' "$(pwd)" "$*" 1>&2; exit 1; }
+
+ensure_exe() {
+  exe="$1"; shift
+  if [[ "$(type -t "$exe")" = "file" ]]; then return; fi
+  failwith "$exe executable not found" "$@"
+}
 
 # https://trac.ffmpeg.org/wiki/Waveform
 tmpimage="/tmp/waveform.png" tmpdata="/tmp/waveform-data"
@@ -20,11 +32,8 @@ plot+='unset key;unset tics;unset border;'
 plot+='set lmargin 0;set rmargin 0;set tmargin 0;set bmargin 0;'
 plot+='plot "<cat" binary filetype=bin format="%int16" endian=little array=1:0'
 plot+='linetype rgb "white" with lines;'
-gen_image() {
-  local image="$images/${PWD#"$music"/}/${1%.*}.png"
-  if [[ -e "$image" && "$image" -nt "$1" ]]; then return; fi
-  echo "### $image ###"
-  mkdir -p "$(dirname "$image")"
+ensure_exe ffmpeg; ensure_exe gnuplot
+mk_image() {
   # ffmpeg -i /tmp/x.mp3 \
   #        -filter_complex "compand,showwavespic=s=640x320" -frames:v 1 \
   #        output.png
@@ -32,7 +41,29 @@ gen_image() {
          -hide_banner -loglevel warning \
          -f data "$tmpdata"
   gnuplot -e "$plot" < "$tmpdata"; rm "$tmpdata"
-  mv "$tmpimage" "$image"
+  mv "$tmpimage" "$2"
+}
+
+ensure_exe aubio "(apt install aubio-tools?)"
+json() {
+  sep="[\n"
+  while read -r line; do printf "$sep%s" "$line"; sep=",\n"; done
+  printf "\n]\n";
+}
+mk_beats() { aubio beat -i "$1" | json > "$2"; }
+
+gen_file() {
+  what="$1" odir="$2" sfx="$3" inp="$4"; shift 4
+  local tgt="$odir/${PWD#"$musicdir"/}/${inp%.*}.$sfx"
+  if [[ -e "$tgt" && "$tgt" -nt "$inp" ]]; then return; fi
+  echo "### $what: $tgt ###"
+  mkdir -p "$(dirname "$tgt")"
+  "mk_$what" "$inp" "$tgt."
+  mv "$tgt." "$tgt"
+}
+gen_files() {
+  gen_file "image" "$imagesdir" "png"  "$@"
+  gen_file "beats" "$beatsdir"  "json" "$@"
 }
 
 fmt="format_tags=title,track,album,artist,genre,date : format=duration"
@@ -84,7 +115,7 @@ file() {
   local sfx="${1##*.}" type extra=""
   case "$sfx" in
     ( "mp3" | "ogg" | "wma" | \
-      "m4a" ) type="audio" extra=audio_info; gen_image "$1" ;;
+      "m4a" ) type="audio" extra=audio_info; gen_files "$1" ;;
     ( "jpg" | "png"         ) type="image" ;;
     ( "mpg"                 ) type="video" ;;
     ( "pdf" | "txt" | "flp" ) type="other" ;;
@@ -109,14 +140,16 @@ dir() {
   done
   cd "$owd"; printf ']}' 1>&5
 }
-dir "" "" 5> "$here/new-info"
+cleanup() { rm -f "$infodir/new-info"; exit; }
+trap cleanup INT
+dir "" "" 5> "$infodir/new-info"
 
-jq . < "$here/new-info" > /dev/null || failwith "produced broken json"
+jq . < "$infodir/new-info" > /dev/null || failwith "produced broken json"
 
-if [[ ! -e "$here/info" ]] \
-     || ! diff -q "$here/new-info" "$here/info" 2>&1 > /dev/null; then
-  mv "$here/new-info" "$here/info"
+if [[ ! -e "$infodir/info" ]] \
+     || ! diff -q "$infodir/new-info" "$infodir/info" 2>&1 > /dev/null; then
+  mv "$infodir/new-info" "$infodir/info"
 else
   echo "No changes"
-  rm "$here/new-info"
+  rm "$infodir/new-info"
 fi
