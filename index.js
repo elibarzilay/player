@@ -14,7 +14,6 @@ const analyzerSmoothing = 0.5, analyzerBins = 512;
 // ---- utils -----------------------------------------------------------------
 
 const $ = x => document.getElementById(x);
-const rec = f => f((...xs) => rec(f)(...xs));
 const { isArray } = Array;
 const { isFinite } = Number;
 const { round, floor, ceil, abs, max, min, random } = Math;
@@ -28,6 +27,8 @@ const clip01 = x => clipRange(0, x, 1);
 const padL = (s, n, c = "\u2007") =>
   typeof s !== "string" ? padL(String(s), n, c)
   : s.length >= n ? s : c.repeat(n - s.length) + s;
+
+const timeout = (wait, cb) => setTimeout(cb, wait);
 
 const shuffle = xs => {
   xs = xs.slice();
@@ -63,9 +64,8 @@ const $message = $("message");
 const message = txt => {
   $message.innerHTML = txt;
   $message.classList.add("active");
-  if (message.timer) clearTimeout(message.timer);
-  message.timer = setTimeout(()=> {
-    message.timer = null; $message.classList.remove("active"); }, 2000);
+  clearTimeout(message.timer);
+  message.timer = timeout(2000, ()=> $message.classList.remove("active"));
 };
 
 // desmos: 1-\cos\left(\frac{\pi}{2}\left(1-\operatorname{abs}\left(x-
@@ -210,9 +210,8 @@ const play = (elt = $.selected) => {
 let unders = [...document.getElementsByClassName("under")];
 const setBackgroundImageLoop = s => {
   if (!s) { setBackgroundImage(); s = imageCycleTime; }
-  if (setBackgroundImageLoop.timer)
-    clearTimeout(setBackgroundImageLoop.timer);
-  setBackgroundImageLoop.timer = setTimeout(setBackgroundImageLoop, 1000*s);
+  clearTimeout(setBackgroundImageLoop.timer);
+  setBackgroundImageLoop.timer = timeout(1000*s, setBackgroundImageLoop);
 };
 const setBackgroundImage = (eltOrPath = $.player) => {
   if (!eltOrPath) return;
@@ -249,10 +248,10 @@ const fadeTo = (tgtTime, cb) => {
       return;
     }
     $player.volume = target + dir * (end - t) / (1000 * time);
-    fadeTo.timer = setTimeout(fade, 1000/fadeToFreq);
+    fadeTo.timer = timeout(1000/fadeToFreq, fade);
   };
-  if (fadeTo.timer) clearTimeout(fadeTo.timer);
-  fadeTo.timer = setTimeout(fade, 1000/fadeToFreq);
+  clearTimeout(fadeTo.timer);
+  fadeTo.timer = timeout(1000/fadeToFreq, fade);
   const from = $player.volume, dir = from > target ? +1 : -1;
   const end  = now() + 1000 * time * abs(target - from);
 };
@@ -768,7 +767,7 @@ const infoDisplay = (()=>{
     textDiv.style.transition = `left ${time}s ${fun || "ease-in-out"}`;
     textDiv.style.left = `${x}px`;
     state = st;
-    if (time <= 0) setTimeout(done, 100);
+    if (time <= 0) timeout(100, done);
   };
   //
   const transition = [];
@@ -1041,8 +1040,8 @@ const search = e => {
   if (search.last === searchStr) return; else search.last = searchStr;
   const searchStrs = searchStr.split(" ");
   search.ok = searchStr === "" ? null : mkSearcher(searchStr);
-  if (search.timer) clearTimeout(search.timer);
-  search.timer = setTimeout(()=> { search.timer = null; showSearch(); }, 250);
+  clearTimeout(search.timer);
+  search.timer = timeout(300, showSearch);
 };
 search.results = [];
 
