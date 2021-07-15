@@ -160,9 +160,11 @@ const div = (parent, css = null, txt = null) => {
   return div;
 };
 
+const allItems = [];
 const renderItem = (elt, info, main) => {
   if (info.type === "dir") elt = div(elt, "list");
   const item = div(elt, ["item", info.type], info.name);
+  allItems.push(item);
   if (main) item.id = info.path;
   item.setAttribute("tabindex", 0);
   item.setAttribute("draggable", true);
@@ -175,16 +177,25 @@ const renderItem = (elt, info, main) => {
   return item;
 };
 
+const focusItemHandler = elt => {
+  if ($.selected && isMainItem(elt) !== isMainItem($.selected))
+    [$.altitem, $.selected] = [$.selected, $.altitem];
+  return $.selected = elt;
+};
+
 const addItemEvents = (elt, info) => {
   elt.addEventListener("click", e => mainOrPlistOp(e, elt, info));
   elt.addEventListener("dragstart", dragStart);
   elt.addEventListener("dragend", dragEnd);
-  elt.addEventListener("focus", ()=> {
-    if ($.selected && isMainItem(elt) !== isMainItem($.selected))
-      [$.altitem, $.selected] = [$.selected, $.altitem];
-    $.selected = elt;
-  });
+  elt.addEventListener("focus", ()=> focusItemHandler(elt));
 };
+
+// can also use allItems.filter(x => !isHidden(x)), but it tends to be slower
+const visibleItems = ()=> [...$main.querySelectorAll([
+  ".list.open > .item",
+  ".list.open > .subs > .item",
+  ".list.open > .subs:not(.only) > .list > .item"
+].join(","))];
 
 // ---- player ----------------------------------------------------------------
 
@@ -435,7 +446,7 @@ const expandDir = (info = getInfo($.selected), expand = "??", focus = true) => {
 };
 
 const showOnly = (info = getInfo($.selected), focus = true) => {
-  const elt0 = $.selected = info.elt;
+  const elt0 = focusItemHandler(info.elt);
   if (info.type !== "dir") info = info.parent;
   let elt = info.elt;
   const toSelect = elt.parentElement.classList.contains("only")
@@ -466,15 +477,27 @@ const mainOp = (e, elt = $.selected, info = getInfo(elt)) =>
   info.type === "image" ? setBackgroundImage(info.path) :
   window.open(info.path, "_blank");
 
-const bindings = new Map(), bind = (keys, op, filter) =>
-  (isArray(keys) ? keys : [keys]).forEach(k => bindings.set(k, [op, filter]));
-window.addEventListener("keydown", e => {
-  const b = bindings.get(e.key) || bindings.get(e.code);
-  if (!b || (b[1] && !b[1](e))) return;
-  stopEvent(e);
-  b[0](e);
-});
-const notCtrl = e => !e.ctrlKey;
+const bind = (keys, op, filter) =>
+  (isArray(keys) ? keys : [keys]).forEach(k => {
+    if (!bind.keys.has(k)) bind.keys.set(k, []);
+    bind.keys.get(k).unshift({ op, filter });
+  });
+bind.keys = new Map();
+bind.handler = e => {
+  if (bind.prehook && bind.prehook(e)) return;
+  const bs = bind.keys.get(e.key) || bind.keys.get(e.code);
+  if (!bs) return;
+  for (const b of bs) {
+    if (b.filter && !b.filter(e)) continue;
+    stopEvent(e);
+    return b.op(e);
+  }
+};
+window.addEventListener("keydown", bind.handler);
+const withCtrl  = e => e.ctrlKey;
+const noCtrl    = e => !e.ctrlKey;
+const noAlt     = e => !e.altKey;
+const noCtrlAlt = e => !e.ctrlKey && !e.altKey;
 
 // ---- playlist --------------------------------------------------------------
 
@@ -604,21 +627,19 @@ const beatMode   = mkToggle("beatmode");
 
 // ---- player interactions ---------------------------------------------------
 
-bind("Enter", mainOrPlistOp);
-bind("Tab", switchMain);
+bind("Enter", mainOrPlistOp, noAlt);
+bind("Tab", switchMain, noCtrlAlt);
 
 const initiateSearch = e => {
   if (e) $search.value = e.key; else $search.select();
   $search.focus(); }
-bind("/", ()=> initiateSearch(), notCtrl);
-bind("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(l => "Key"+l),
-     initiateSearch, notCtrl);
+bind("/", ()=> initiateSearch(), noCtrlAlt);
 
 bind(["Backspace", "Delete"], e => plistDelete(e.key === "Backspace"));
 
-bind("+", ()=> expandDir(U, true),   notCtrl);
-bind("-", ()=> expandDir(U, false),  notCtrl);
-bind("*", ()=> expandDir(U, "deep"), notCtrl);
+bind("+", ()=> expandDir(U, true),   noCtrlAlt);
+bind("-", ()=> expandDir(U, false),  noCtrlAlt);
+bind("*", ()=> expandDir(U, "deep"), noCtrlAlt);
 
 bind("\\", bigvizMode);
 bind("|",  ()=> flashyMode()); // avoid shift opening a window
@@ -649,7 +670,7 @@ bind("ArrowRight",     playerMove(+1));
 
 const markers = new Map();
 const markerJump = e => {
-  const {key, code, shiftKey: shift, ctrlKey: ctrl} = e;
+  const {key, code, ctrlKey: ctrl} = e;
   const n = +e.code.substring(code.length-1);
   if (ctrl) {
     let m = markers.get($player.info);
@@ -680,10 +701,10 @@ $volume.addEventListener("mousedown", e =>
   e.button === 1 && updateVolume($volumeMax));
 $volume.addEventListener("wheel", e => {
   stopEvent(e); updateVolume(+$volume.value + wheelToN(e, -1, 2, 0)); });
-bind("Numpad8", e => e.ctrlKey
-  ? updateGain(+$gain.value + 0.25) : updateVolume(+$volume.value + 1));
-bind("Numpad2", e => e.ctrlKey
-  ? updateGain(+$gain.value - 0.25) : updateVolume(+$volume.value - 1));
+bind("Numpad8", ()=> updateVolume(+$volume.value + 1), noCtrl);
+bind("Numpad8", ()=> updateGain(+$gain.value + 0.25),  withCtrl);
+bind("Numpad2", ()=> updateVolume(+$volume.value - 1), noCtrl);
+bind("Numpad2", ()=> updateGain(+$gain.value - 0.25),  withCtrl);
 
 $player.defaultPlaybackRate = 1;
 const $rate = $("rate"), $rateMax = +$rate.max;
@@ -1012,9 +1033,9 @@ const showCurSearch = ()=> {
     return null;
   }
   const cur = search.results[search.cur];
-  isHidden(cur.elt) ? showOnly(cur, false) : $.selected = cur.elt;
-  cur.elt.scrollIntoView(
-    {behavior: "auto", block: "nearest", inline: "nearest"});
+  isHidden(cur.elt) ? showOnly(cur, false) : focusItemHandler(cur.elt);
+  cur.elt.scrollIntoView({
+    behavior: "auto", block: "nearest", inline: "nearest" });
   $("result-number").innerText = (search.cur + 1) + "/" + len;
   return cur;
 };
@@ -1046,7 +1067,7 @@ const search = e => {
 search.results = [];
 
 const searchKey = e => {
-  const {key, code, shiftKey: shift, ctrlKey: ctrl} = e;
+  const { key, code, shiftKey: shift, ctrlKey: ctrl } = e;
   if (key === "Enter" || code === "Backslash" || code.startsWith("Numpad")
       || ((shift || ctrl) && (key === " " || code.startsWith("Digit"))))
     return;
@@ -1064,6 +1085,89 @@ $search.addEventListener("focus", search);
 $search.addEventListener("blur",  search);
 $search.addEventListener("input", search);
 $search.addEventListener("keydown", searchKey);
+
+// ---- quick search ----------------------------------------------------------
+
+const quickSearch = str => {
+  str = str.toLowerCase();
+  const r = new Range(); let first = null;
+  if (quickSearch.items) quickSearch.clear();
+  quickSearch.items = [];
+  const items = visibleItems(), start = items.indexOf(quickSearch.startItem);
+  if (start > -1)
+    items.push(...items.splice(0, (start + 1) % items.length));
+  for (const search of [`^${str}`, `\\b${str}`, `${str}`,
+                        str.split("").join(".*?")]) {
+    const rx = new RegExp(search, "id");
+    items.forEach(item => {
+      const p = rx.exec(getInfo(item).name)?.indices[0];
+      if (!p) return;
+      const children = item.childNodes;
+      if (children.length !== 1 || children[0].nodeType !== Node.TEXT_NODE)
+        throw Error(`unexpected childNodes`);
+      const c = children[0];
+      quickSearch.items.push(item);
+      r.setStart(c, p[0]); r.setEnd(c, p[1]);
+      r.surroundContents(document.createElement("mark"));
+      if (!first) first = item;
+    });
+    if (first) {
+      first.scrollIntoView({
+        behavior: "auto", block: "nearest", inline: "nearest" });
+      first.focus();
+      focusItemHandler(first);
+      return;
+    }
+  }
+};
+quickSearch.clear = ()=> {
+  quickSearch.items?.forEach(item =>
+    item.replaceChildren(document.createTextNode(getInfo(item).name)));
+  quickSearch.items = null;
+};
+quickSearch.str = "";
+quickSearch.key = key => {
+  quickSearch.str =
+    key === "DEL" ? quickSearch.str.slice(0,-1)
+    : quickSearch.str + (key === "-" ? "–" : key);
+  clearTimeout(quickSearch.timer);
+  quickSearch.timer = timeout(300, ()=> {
+    quickSearch(quickSearch.str);
+    if (quickSearch.str === "") quickSearch.stop();
+    else quickSearch.timer = timeout(10000, quickSearch.stop);
+  });
+};
+quickSearch.handler = ({ key }) => {
+  // normal use keys
+  if (["Arrow", "Numpad", "Page", "Home", "End"]
+      .some(pfx => key.startsWith(pfx))) {
+    return false;
+  }
+  // terminate search, then normal use
+  if (["Enter", "/", "Tab"].includes(key)) {
+    quickSearch(quickSearch.str, true);
+    quickSearch.stop();
+    return false;
+  }
+  if (["Backspace", "Delete"].includes(key)) quickSearch.key("DEL");
+  if (/^[ \-\p{L}\p{N}\p{S}]$/u.test(key))   quickSearch.key(key);
+  return true;
+};
+quickSearch.start = ({ key }) => {
+  quickSearch.str = "";
+  quickSearch.startItem = $.selected;
+  quickSearch.key(key);
+  bind.prehook = quickSearch.handler;
+};
+quickSearch.stop = ()=> {
+  clearTimeout(quickSearch.timer);
+  quickSearch.str = "";
+  quickSearch.startItem = null;
+  quickSearch.clear();
+  bind.prehook = null;
+};
+bind("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(l => "Key"+l),
+     quickSearch.start, noCtrlAlt);
 
 // ---- audio wiring ----------------------------------------------------------
 
