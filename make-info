@@ -15,7 +15,9 @@ cd "$musicdir"
 
 set -eu
 
-failwith() { printf '[%s] %s\n' "$(pwd)" "$*" 1>&2; exit 1; }
+failwith() {
+  printf 'error [%s] %s\n' "$(pwd)" "${*//$'\n'/$'\n'  }" 1>&2; exit 1
+}
 
 ensure_exe() {
   exe="$1"; shift
@@ -133,13 +135,37 @@ dir() {
   printf '\n%s  ' "$indent" 1>&5
   indent+="  "
   owd="$PWD"; cd "$dir"
-  pwd 1>&2
+  echo "${PWD#$musicdir/}"
   for f in *; do
     if ! ((fst)); then printf ',\n%s' "$indent" 1>&5; fi; fst=0
     if [[ -f "$f" ]]; then file "$f"; else dir "$indent" "$f"; fi
   done
   cd "$owd"; printf ']}' 1>&5
 }
+
+findbad() {
+  msg="$1"; shift
+  if [[ "$1" = "." ]]; then args=("$@")
+  else args=(. -path "./.*" -prune -o \( "$@" \) -printf "%P\n"); fi
+  bad="$(find "${args[@]}")"
+  if [[ -n "$bad" ]]; then failwith "$msg:"$'\n'"$bad"; fi
+}
+findbad "unexpected toplevel files" . -maxdepth 1 -type f -not -name ".ht*"
+findbad "bad file permissions" -type f -not -perm 644
+findbad "bad dir permissions" -type d -not -perm 755
+findbad "space in path name" -name "* *"
+findbad "bad seperators" \
+        -name "*[^[:alnum:]][._-]*" -o -name "*[._-][^[:alnum:]]*"
+findbad "unexpected characters in path name" -name "*[^A-Za-z0-9._áéíñóú+-]*"
+
+fileexists() { set -- "${1-}"*; test -f "$1"; }
+for dir in "$imagesdir" "$beatsdir"; do
+  for f in $(find "$dir" -type f -printf "%P\n"); do
+    if fileexists "${f%.*}".*; then continue; fi
+    failwith "redundant file:"$'\n'"$dir/$f"
+  done
+done
+
 cleanup() { rm -f "$infodir/new-info"; exit; }
 trap cleanup INT
 dir "" "" 5> "$infodir/new-info"
