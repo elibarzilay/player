@@ -36,6 +36,8 @@ plot+='plot "<cat" binary filetype=bin format="%int16" endian=little array=1:0'
 plot+='linetype rgb "white" with lines;'
 ensure_exe ffmpeg; ensure_exe gnuplot
 mk_image() {
+  if [[ -e "$tmpimage" ]]; then rm "$tmpimage"; fi
+  if [[ -e "$tmpdata" ]]; then rm "$tmpdata"; fi
   # ffmpeg -i /tmp/x.mp3 \
   #        -filter_complex "compand,showwavespic=s=640x320" -frames:v 1 \
   #        output.png
@@ -46,26 +48,43 @@ mk_image() {
   mv "$tmpimage" "$2"
 }
 
-ensure_exe aubio "(apt install aubio-tools?)"
+ensure_exe aubiotrack "(apt install aubio-tools?)"
 json() {
   sep="[\n"
   while read -r line; do printf "$sep%s" "$line"; sep=",\n"; done
   printf "\n]\n";
 }
-mk_beats() { aubio beat -i "$1" | json > "$2"; }
+mk_beats() { aubiotrack --bufsize 1024 --hopsize 512 -i "$1" | json > "$2"; }
 
+# Can be useful for visualizations?
+# mk_onsets() { aubioonset --bufsize 1024 --hopsize 512 -i "$1" | json > "$2"; }
+
+indent() {
+  local space="$1"; shift
+  while IFS= read -r L; do
+    L="${L//[$'\r\n']/}"; if [[ -n "$L" ]]; then echo "$space$L"; fi
+  done
+}
+inp_shown=0
 gen_file() {
-  what="$1" odir="$2" sfx="$3" inp="$4"; shift 4
+  local what="$1" odir="$2" sfx="$3" inp="$4"; shift 4
   local tgt="$odir/${PWD#"$musicdir"/}/${inp%.*}.$sfx"
   if [[ -e "$tgt" && "$tgt" -nt "$inp" ]]; then return; fi
-  echo "### $what: $tgt ###"
+  if ((!inp_shown)); then echo "  $inp"; inp_shown=1; fi
+  echo "    $what: ${tgt#"$musicdir"/}"
   mkdir -p "$(dirname "$tgt")"
-  "mk_$what" "$inp" "$tgt."
+  AV_LOG_FORCE_COLOR=1 "mk_$what" "$inp" "$tgt." |& indent "    | "; printf "\033[0m"
   mv "$tgt." "$tgt"
+  if [[ ! -e "$tgt" ]]; then failwith "could not generate $tgt"; fi
+  if [[ ! -s "$tgt" ]]; then failwith "got an empty file: $tgt"; fi
+  if [[ "$inp" -nt "$tgt" ]]; then
+    failwith "generated file not newer, should touch $inp"
+  fi
 }
 gen_files() {
-  gen_file "image" "$imagesdir" "png"  "$@"
-  gen_file "beats" "$beatsdir"  "json" "$@"
+  local inp="$1"; shift; inp_shown=0
+  gen_file "image" "$imagesdir" "png"  "$inp"
+  gen_file "beats" "$beatsdir"  "json" "$inp"
 }
 
 fmt="format_tags=title,track,album,artist,genre,date : format=duration"
@@ -135,7 +154,7 @@ dir() {
   printf '\n%s  ' "$indent" 1>&5
   indent+="  "
   owd="$PWD"; cd "$dir"
-  echo "${PWD#$musicdir/}"
+  if [[ "$PWD" != "$musicdir" ]]; then echo "${PWD#"$musicdir"/}"; fi
   for f in *; do
     if ! ((fst)); then printf ',\n%s' "$indent" 1>&5; fi; fst=0
     if [[ -f "$f" ]]; then file "$f"; else dir "$indent" "$f"; fi
@@ -162,6 +181,9 @@ fileexists() { set -- "${1-}"*; test -f "$1"; }
 for dir in "$imagesdir" "$beatsdir"; do
   for f in $(find "$dir" -type f -printf "%P\n"); do
     if fileexists "${f%.*}".*; then continue; fi
+    if [[ "$f" = *. ]]; then
+      echo "### Removing old work file: $dir/$f"; rm "$dir/$f"; continue
+    fi
     failwith "redundant file:"$'\n'"$dir/$f"
   done
 done
