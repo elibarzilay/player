@@ -1456,13 +1456,13 @@ const init = data => {
   updateDisplays(null);
 };
 
-fetch("info", { method: "HEAD" })
+fetch("info.json", { method: "HEAD" })
   .then(r => localStorage.date === r.headers.get("last-modified")
              && localStorage.all
              ? init(JSON.parse(localStorage.all))
              : (delete localStorage.all,
                 localStorage.date = r.headers.get("last-modified"),
-                fetch("info")
+                fetch("info.json")
                   .then(r => r.json())
                   .then(data => init(processData(data)))));
 

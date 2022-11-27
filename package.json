@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "murmurhash-native": "^3.5.0"
+  }
+}
