@@ -40,6 +40,28 @@ const newerFile = (file1, file2) => {
   return s1 && s2 && s1.mtimeMs > s2.mtimeMs;
 };
 
+import * as zlib from "zlib";
+const readFile = file => {
+  const tryReading = (file, decompress) => {
+    const st = fs.statSync(file, { throwIfNoEntry: false });
+    if (!(st && st.isFile())) return null;
+    const data = fs.readFileSync(file);
+    if (!decompress) return data.toString();
+    return decompress(data).toString();
+  };
+  if (file.endsWith(".gz")) return tryReading(file, zlib.gunzipSync);
+  if (file.endsWith(".br")) return tryReading(file, zlib.brotliDecompressSync);
+  return tryReading(file, null)
+      ?? tryReading(file + ".gz", zlib.gunzipSync)
+      ?? tryReading(file + ".br", zlib.brotliDecompressSync);
+};
+const writeFile = (file, contents) =>
+  fs.writeFileSync(
+    file,
+    file.endsWith(".br")   ? zlib.brotliCompressSync(contents)
+    : file.endsWith(".gz") ? zlib.gzipSync(contents)
+    : contents);
+
 import { spawnSync } from "child_process";
 const runGeneric = stdio => (cmd, ...args) => {
   const p = spawnSync(cmd, args, { stdio });
@@ -54,6 +76,57 @@ const runGeneric = stdio => (cmd, ...args) => {
 const run = runGeneric([ "ignore", "inherit", "inherit" ]);
 const runGet = runGeneric([ "ignore", "pipe", "inherit" ]);
 const runGetBoth = runGeneric([ "ignore", "pipe", "pipe" ]);
+
+let parallelJobs = null;
+const PArg = str => ({ arg: str });
+const runParallel = (...xs) => cb => {
+  const bad = what => failWith(`parallel call with ${what}: ${xs.join(", ")}`);
+  let args = xs.filter(x => x.arg);
+  if (!args.length) bad(`no args`);
+  const cmd = xs.map(x =>
+    typeof x === "string" ? x : !x.arg ? bad(`a bad value`)
+           : `{${2 + args.indexOf(x)}}`); // {2}, {3}, ...
+  args = args.map(a => a.arg);
+  if (!parallelJobs) {
+    parallelJobs = { cmd, jobs: [{ args, cb }] };
+  } else if (!parallelJobs.cmd.every((x, i) => x === cmd[i])) {
+    bad(`a different template`);
+  } else {
+    parallelJobs.jobs.push({ args, cb });
+  }
+};
+const executeParallelJobs = () => {
+  if (!parallelJobs) return;
+  console.log(`  Running ${parallelJobs.jobs.length} jobs`);
+  const workDir = "/tmp/make-info-work";
+  const idsFile = join(workDir, "ids");
+  const argsFiles = parallelJobs.jobs[0].args.map((_, i) =>
+    join(workDir, "args" + (i+2)));
+  if (fs.statSync(workDir, { throwIfNoEntry: false }))
+    failWith(`work directory exists: ${workDir}`);
+  fs.mkdirSync(workDir, { recursive: true });
+  fs.writeFileSync(
+    idsFile, parallelJobs.jobs.map((job, i) => i).join("\n") + "\n");
+  argsFiles.forEach((f, i) =>
+    fs.writeFileSync(f, parallelJobs.jobs.map(job =>
+      job.args[i]).join("\n") + "\n"));
+  run("parallel", "--quote", "--bar", "--results", join(workDir, "j{1}"),
+      ...parallelJobs.cmd, "::::", idsFile,
+      ...argsFiles.flatMap(f => ["::::+", f]));
+  parallelJobs.jobs.forEach((job, i) => {
+    const err = readFile(join(workDir, "j" + i + ".err")).trim();
+    const out = readFile(join(workDir, "j" + i)).trim();
+    if (job.cb?.length === 2) return job.cb(out, err);
+    if (err.length) {
+      console.error(`Error output for ${job.args.join("+")}:`);
+      console.error(`> ${err.replace(/(?:\r?\n)+$/, "")
+                            .replace(/\n(.)/g, "\n> $1")}`);
+    }
+    job.cb?.(out);
+  });
+  parallelJobs = null;
+  fs.rmSync(workDir, { recursive: true, force: true });
+};
 
 const mapGetSet = (map, key, val) => {
   const v1 = map.get(key);
@@ -70,26 +143,6 @@ import mPkg from "murmurhash-native";
 const { murmurHash } = mPkg;
 
 const fileHash = path => murmurHash(fs.readFileSync(path)).toString(36);
-
-import * as zlib from "zlib";
-const readFile = file => {
-  const tryReading = (file, decompress) => {
-    const st = fs.statSync(file, { throwIfNoEntry: false });
-    if (!(st && st.isFile())) return null;
-    const data = fs.readFileSync(file);
-    if (!decompress) return data;
-    return decompress(data);
-  };
-  return tryReading(file, null)
-      || tryReading(file + ".gz", zlib.gunzipSync)
-      || tryReading(file + ".br", zlib.brotliDecompressSync);
-};
-const writeFile = (file, contents) =>
-  fs.writeFileSync(
-    file,
-    file.endsWith(".br")   ? zlib.brotliCompressSync(contents)
-    : file.endsWith(".gz") ? zlib.gzipSync(contents)
-    : contents);
 
 const verCompare = (s1, s2) => {
   let i1 = 0, i2 = 0;
@@ -133,11 +186,7 @@ Object.keys(conf).forEach(k => {
   if (!["Dir", "File"].includes(t)) return;
   conf[k] = join(__dirname, conf[k]);
   if (t !== "Dir") return;
-  try {
-    if (!fs.statSync(conf[k]).isDirectory()) { throw true; }
-  } catch (e) {
-    failWith(`missing directory for conf.${k}: ${conf[k]}`);
-  }
+  fs.mkdirSync(conf[k], { recursive: true });
 });
 
 const hostname = runGet("hostname", "-s");
@@ -166,9 +215,9 @@ const getInfo = dir => {
            m: { path: dir ?? "." }, children };
 };
 
-const makeCounter = what => {
+const mkCounter = (n, what) => {
   if (!what) return () => {};
-  let n = totalPaths, last = null;
+  let last = null;
   return done => {
     if (n === null) return;
     if (done || --n < 0) {
@@ -198,7 +247,7 @@ const getCachedInfo = () => {
     console.error(`Warning, running on a different host,`
                   + ` using only hashes (ignoring timestamps)`);
   const updateEntry = (info, cache) => {};
-  const c = makeCounter(`Merging cached values`);
+  const c = mkCounter(totalPaths, `Merging cached values`);
   const loopBoth = (info, cache) => {
     c();
     if (!cache || info.type !== cache.type) return;
@@ -216,7 +265,7 @@ const getCachedInfo = () => {
 };
 
 const infoForEach = (what, dirs, f) => {
-  const c = makeCounter(what);
+  const c = mkCounter(totalPaths, what);
   const loop = info => {
     c();
     const isDir = info.type === "dir";
@@ -225,6 +274,7 @@ const infoForEach = (what, dirs, f) => {
   };
   loop(info);
   c(true);
+  executeParallelJobs();
 };
 
 const sanityTests = () => infoForEach(
@@ -262,29 +312,23 @@ const findDuplicates = () => {
 const cleanupData = kvMap(
   // downcase keys, redundant quotes, and silly \\x0 (from amazon)
   s => s.toLowerCase(),
-  v => typeof v !== "string" ? v : v.trim()
-    .replace(/^"\s*(.*)\s*"$/, "$1").replace(/^(?:\\x00)+$/, ""),
+  v => typeof v !== "string" ? v
+       : v.trim().replace(/^"\s*(.*)\s*"$/, "$1").replace(/^(?:\\x00)+$/, ""),
 );
 const getAudioData = () => infoForEach("Reading metadata", false, info => {
-  if (info.type !== "audio") return;
-  info.m.audioData ??= cleanupData(JSON.parse(runGet(
-    "ffprobe",
-    "-hide_banner",
-    "-loglevel", "error",
-    "-show_error",
-    "-show_format",
-    "-show_streams",
-    "-show_programs",
-    "-show_chapters",
-    "-show_private_data",
-    "-print_format", "json",
-    info.m.path)));
-  const format = info.m.audioData.format;
-  const streams =
-    info.m.audioData.streams.filter(s => s.codec_type === "audio");
-  if (streams.length !== 1)
-    failWith(`${streams.length ? "more than one" : "no"
-              } audio stream for ${info.m.path}`);
+  if (info.type !== "audio" || info.m.audioData) return;
+  runParallel(
+    "ffprobe", "-hide_banner", "-loglevel", "error", "-show_error",
+    "-show_format", "-show_streams", "-show_programs", "-show_chapters",
+    "-show_private_data", "-print_format", "json", PArg(info.m.path))
+  (out => {
+    info.m.audioData = cleanupData(JSON.parse(out));
+    const streams =
+          info.m.audioData.streams.filter(s => s.codec_type === "audio");
+    if (streams.length !== 1)
+      failWith(`${streams.length ? "more than one" : "no"
+                 } audio stream for ${info.m.path}`);
+  });
 });
 
 const safeWrite = (what, data, file) => {
@@ -354,13 +398,14 @@ const genFiles = (genDir, ext, gen) => {
     if (newerFile(tgt, src)) return;
     if (!mkLoop.shown) console.log(`Making files in ${home(genDir)}`);
     mkLoop.shown = true;
-    console.log(`  ${tgtExt}`);
+    // console.log(`  ${tgtExt}`); // done by parallel later
     fs.rmSync(tgt, { recursive: true, force: true });
-    gen(src, tgt);
-    if (!newerFile(tgt, src)) failWith(`Failed to generate ${home(tgt)}`);
+    gen(src, tgt, () =>
+      newerFile(tgt, src) || failWith(`failed to generate ${home(tgt)}`));
   };
   rmLoop(genDir, info.children);
   mkLoop(info);
+  executeParallelJobs();
 };
 
 const imageGen = [
@@ -372,23 +417,26 @@ const imageGen = [
   `[bg][r]overlay=format=auto[t]`,
   `[t][l]overlay=y=main_h/2:format=auto`,
 ].join(";");
-const mkImage = (src, tgt) =>
-  run("ffmpeg", "-hide_banner", "-loglevel", "error",
-      "-i", src, "-filter_complex", imageGen, "-frames:v", "1", tgt);
+const mkImage = (src, tgt, done) =>
+  runParallel("ffmpeg", "-hide_banner", "-loglevel", "error",
+              "-i", PArg(src), "-filter_complex", imageGen, "-frames:v", "1",
+              PArg(tgt))(done);
 
 // Note: `aubiotrack` is a binary, `aubio beat` is a python script. Also, the
 // man page is outdated, the default bufsize/hopsize are 1024/512 (= the listed
 // default for `aubio beat`). Also, ignore some stderr lines that are
 // unavoidable(?).
-const mkAubio = exe => (src, tgt) => {
-  const [data, err] = runGetBoth(exe, "-i", src);
-  if (!data.match(/^\d+\.\d+\n/)) failWith(`failed to get beats from: ${src}`);
-  const realErr = (err + "\n")
-    .replace(/.*timestamps for (?:skipped|discarded) samples.*\n/g, "")
-    .replace(/.*overread, skip .* enddists:.*\n/g, "")
-    .replace(/\n$/, "");
-  if (realErr.length) console.error(realErr);
-  writeFile(tgt, `[\n${data.replace(/\n/g, ",\n")}\n]\n`);
+const mkAubio = exe => (src, tgt, done) => {
+  runParallel(exe, "-i", PArg(src))((out, err) => {
+    if (!out.match(/^\d+\.\d+\n/)) failWith(`failed to get beats from: ${src}`);
+    const realErr = (err + "\n")
+          .replace(/.*timestamps for (?:skipped|discarded) samples.*\n/g, "")
+          .replace(/.*overread, skip .* enddists:.*\n/g, "")
+          .replace(/\n$/, "");
+    if (realErr.length) console.error(realErr);
+    writeFile(tgt, `[\n${out.replace(/\n/g, ",\n")}\n]\n`);
+    done();
+  });
 };
 const mkBeats = mkAubio("aubiotrack");
 const mkOnsets = mkAubio("aubioonset"); // might be useful for visualizations?
