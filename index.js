@@ -1188,6 +1188,41 @@ const audio = (()=>{
     return a;
   });
   const setGain = g => gain.gain.value = g;
+  // experimental effects to play with (see the "experiments" directory)
+  const effectNodes = []; // nodes between src and gain
+  const effects = {
+    append: node => {
+      const last = effectNodes.length ? effectNodes[effectNodes.length-1] : src;
+      last.disconnect(gain);
+      last.connect(node);
+      node.connect(gain);
+      effectNodes.push(node);
+    },
+    prepend: node => {
+      const first = effectNodes.length ? effectNodes[0] : gain;
+      src.disconnect(first);
+      src.connect(node);
+      node.connect(first);
+      effectNodes.unshift(node);
+    },
+    clear: ()=> {
+      if (effectNodes.length === 0) return;
+      let last = src;
+      for (const node of effectNodes) { last.disconnect(node); last = node; }
+      effectNodes.length = 0;
+      last.disconnect(gain);
+      src.connect(gain);
+    },
+    set: (...nodes) => {
+      effects.clear();
+      if (nodes.length === 0) return;
+      src.disconnect(gain);
+      let last = src;
+      for (const node of nodes) { last.connect(node); last = node; }
+      last.connect(gain);
+      effectNodes.push(...nodes);
+    }
+  };
   // experimental
   const getDevices = async ()=> {
     await navigator.mediaDevices.getUserMedia({audio: true}); // get permission
@@ -1217,8 +1252,10 @@ const audio = (()=>{
     devAudio.setSinkId(d.deviceId);
   };
   //
-  return { analyzers, setGain, showDevices, useDevice,
-           resume: c.resume.bind(c) };
+  return {
+    ctx: c, resume: c.resume.bind(c), setGain, analyzers, effects,
+    device: { list: showDevices, use: useDevice },
+  };
 })();
 
 // ---- visualizations --------------------------------------------------------
