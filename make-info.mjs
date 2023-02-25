@@ -7,7 +7,7 @@ const conf = {
   musicDir:  "..",
   imagesDir: "images",
   beatsDir:  "beats",
-  imageSize: "960x160",
+  imageSize: "1920x160",
 };
 
 const types = {

@@ -12,37 +12,40 @@
              spellcheck="false"> /
   </div>
   <div id="control-panel" class="control">
-    <div id="times"><div id="time">?:??</div><div id="dur">?:??</div></div>
-    <div>
-      <div id="playerbuttons" class="media-buttons">
-        <div id="p-prev" >0</div>
-        <div id="p-rew"  >1</div>
-        <div id="p-stop" >2</div>
-        <div id="p-pause">3</div>
-        <div id="p-play" >4</div>
-        <div id="p-fwd"  >5</div>
-        <div id="p-next" >6</div>
+    <div class="flex-line">
+      <div id="times"><div id="time">?:??</div><div id="dur">?:??</div></div>
+      <div>
+        <div id="playerbuttons" class="media-buttons">
+          <div id="p-prev" >0</div>
+          <div id="p-rew"  >1</div>
+          <div id="p-stop" >2</div>
+          <div id="p-pause">3</div>
+          <div id="p-play" >4</div>
+          <div id="p-fwd"  >5</div>
+          <div id="p-next" >6</div>
+        </div>
+        <audio id="player" preload="auto"></audio>
+        <div id="wave"><img id="wave-image"><div id="wave-needle"></div></div>
       </div>
-      <audio id="player" preload="auto"></audio>
-      <div id="wave"><img id="wave-image"><canvas id="wave-canvas"></div>
-    </div>
-    <div id="sliders">
-      <input type="range" id="gain"   title="Amp"    class="slider" max="4" step="0.25">
-      <input type="range" id="volume" title="Volume" class="slider" max="10">
-      <input type="range" id="rate"   title="Speed"  class="slider" max="8" >
-    </div>
-    <div id="viz-container" class="fill-right">
-      <canvas id="visualization"></canvas>
-      <div id="viz-toggles">
-        <div id="fftviz" class="toggle on" title="Freqy"></div>
-        <div id="wavviz" class="toggle on" title="Wavy" ></div>
-        <div id="bigviz" class="toggle"    title="Yuge" ></div>
+      <div id="sliders">
+        <input type="range" id="gain"   title="Amp"    class="slider" max="4" step="0.25">
+        <input type="range" id="volume" title="Volume" class="slider" max="10">
+        <input type="range" id="rate"   title="Speed"  class="slider" max="8" >
+      </div>
+      <div id="viz-container">
+        <canvas id="visualization"></canvas>
+        <div id="viz-toggles">
+          <div id="fftviz" class="toggle on" title="Freqy"></div>
+          <div id="wavviz" class="toggle on" title="Wavy" ></div>
+          <div id="bigviz" class="toggle"    title="Yuge" ></div>
+        </div>
       </div>
     </div>
-    <br>
-    <span id="flashy" class="toggle" title="Flashy">❊</span>
-    <div id="loop" class="media-buttons toggle on" title="Loopy">7</div>
-    <div id="track-info" class="fill-right"><div></div></div>
+    <div class="flex-line">
+      <div id="flashy" class="toggle" title="Flashy">❊</div>
+      <div id="loop" class="media-buttons toggle on" title="Loopy">7</div>
+      <div id="track-info"><div></div></div>
+    </div>
   </div>
   <div id="message"></div>
   <img class="under">

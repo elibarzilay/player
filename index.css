@@ -83,7 +83,7 @@ body.flashy .itemlist { background: var(--volcolor); }
 }
 body.flashy .control { background: var(--volcolor); }
 
-.fill-right { width: 100%; } /* width set in js */
+.flex-line { display: flex; align-items: center; gap: 5px; }
 
 #control-panel {
   user-select: none;
@@ -91,10 +91,11 @@ body.flashy .control { background: var(--volcolor); }
   width: calc(49vw - var(--page-margin) - 1em);
 }
 #control-panel.drag-to { background: #4448; }
-#control-panel > div { display: inline-block; }
 
-#viz-container { margin: -50% 0; vertical-align: middle; }
-#visualization { width: 100%; height: 14ex; }
+#sliders { z-index: 2; }
+
+#viz-container { margin: -20% -80px; flex-grow: 1; }
+#visualization { margin-top: 50px; width: 100%; height: 16ex; }
 :root.bigviz #visualization {
   position: fixed; left: 0; top: 0; width: 100vw; height: 100vh;
   pointer-events: none; opacity: 0.75; z-index: 9;
@@ -108,7 +109,7 @@ body.flashy .control { background: var(--volcolor); }
 }
 #message.active { top: 2.5em; right: 1em; opacity: 1; color: #fff; }
 
-#track-info { overflow: hidden; position: relative; }
+#track-info { overflow: hidden; position: relative; flex-grow: 1; }
 #track-info > div {
   position: relative; left: 0; white-space: nowrap; display: inline-block;
 }
@@ -124,7 +125,6 @@ body.flashy .control { background: var(--volcolor); }
 
 #flashy { background: var(--volcolor); border-radius: 15%; }
 
-#sliders { position: absolute; top: 12px; }
 .slider { height: 2ex; background: #0000; -webkit-appearance: none; }
 #volume, #gain {
   width: 8ex;  margin: 1ex -3ex; transform: rotate(-90deg); vertical-align: top;
@@ -154,10 +154,15 @@ body.flashy .control { background: var(--volcolor); }
 
 #wave { position: relative; display: block; width: 10em; height: 2ex;
         background: #444; cursor: col-resize; }
-#wave-image, #wave-canvas { width: 100%; height: 100%; }
-#wave-canvas { position: absolute; top: 0; left: 0; }
-:root.bigviz #wave { background: #222; }
-:root.bigviz #wave-image { opacity: 0.3; }
+#wave-image { width: 100%; height: 100%; image-rendering: pixelated; }
+#wave-needle {
+  position: absolute; top: 0; left: 0; width: 0.2%; height: 100%;
+  background-color: #f44;
+}
+:root.bigviz #wave {
+  position: fixed; left: 0; bottom: 0vh; width: 100vw; height: 4vh;
+  background: #222; opacity: 0.75; z-index: 8;
+}
 
 #times { font-size: 130%; width: 5ex; margin-right: 1ex; cursor: pointer; }
 #times > div { text-align: right; }

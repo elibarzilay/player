@@ -8,7 +8,6 @@ const bigSkip = 60, smallSkip = 5, smallerSkipDiv = 2;
 const fadeToFreq = 20, pauseFade = 0.5, switchFade = 0.25; // time for 0-1 fade
 const imageDelayTime = 2, imageCycleTime = 60, imageExplicitTime = 120;
 const tickerTime = 60, tickerSwapTime = 1;
-const waveNeedleColor = "#f00a", waveNeedleWidth = 2;
 const analyzerSmoothing = 0.5, analyzerBins = 512;
 
 // ---- utils -----------------------------------------------------------------
@@ -754,6 +753,7 @@ const updateTimes = ()=> {
     updateTimes.shownTime = null;
     updateTimes.shownPath = null;
     $dur.innerText = $time.innerText = "–:––";
+    drawPlayerLine(null);
     beats.update(null);
     return;
   }
@@ -762,9 +762,10 @@ const updateTimes = ()=> {
     updateTimes.shownPath = path;
     $dur.innerText = formatTime(round($player.duration));
   }
-  let t = $player.currentTime;
+  let t = $player.currentTime, d = $player.duration;
+  drawPlayerLine(t / d);
   beats.update(t);
-  if (timeRemaining) t = $player.duration - t;
+  if (timeRemaining) t = d - t;
   t = round(t);
   if (updateTimes.shownTime !== t) {
     updateTimes.shownTime = t;
@@ -779,7 +780,7 @@ const infoDisplay = (()=>{
   const START = 0, END = 1, CLEARSTART = 2, CLEAREND = 3, NEWTEXT = 4;
   let initialized = false, state = START, newText = "", moveTo = 0;
   //
-  const move = (x, st, {time = tickerTime, text = U, fun = U} = {}) => {
+  const move = (x, st, { time = tickerTime, text = U, fun = U } = {}) => {
     if (text !== U) {
       textDiv.innerText = text;
       moveTo = infoDiv.offsetWidth - textDiv.scrollWidth;
@@ -795,11 +796,11 @@ const infoDisplay = (()=>{
   transition[START]      = ()=> move(0, END);
   transition[END]        = ()=> move(moveTo, START);
   transition[NEWTEXT]    = ()=> move(0, END,
-                                     {time: tickerSwapTime, fun: "ease-out"});
+                                     { time: tickerSwapTime, fun: "ease-out" });
   transition[CLEARSTART] = ()=> move(-(textDiv.scrollWidth+1), CLEAREND,
-                                     {time: tickerSwapTime, fun: "ease-in"});
+                                     { time: tickerSwapTime, fun: "ease-in" });
   transition[CLEAREND]   = ()=> move(infoDiv.offsetWidth, NEWTEXT,
-                                     {time: 0, text: newText});
+                                     { time: 0, text: newText });
   const done = ()=> transition[state]();
   //
   if (!initialized) {
@@ -829,16 +830,20 @@ const updateTrackInfo = ()=> {
 // ---- waveform control ------------------------------------------------------
 
 const drawPlayerLine = (()=>{
-  const canvas = $("wave-canvas"), ctx = canvas.getContext("2d");
-  return ()=> {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = waveNeedleColor;
-    const loc = $player.currentTime / $player.duration;
-    ctx.fillRect(loc * canvas.width - waveNeedleWidth/2, 0,
-                 waveNeedleWidth, canvas.height);
+  const $needle = $("wave-needle");
+  const half = $needle.computedStyleMap().get("width").value / 2;
+  let shown = true;
+  return loc => {
+    if (loc === null) {
+      if (shown) { shown = false; $needle.style.display = "none"; }
+    } else {
+      if (!shown) { shown = true; $needle.style.display = ""; }
+      $needle.style.left = (100 * loc - half) + "%";
+    }
   };
 })();
-$player.addEventListener("timeupdate", drawPlayerLine);
+// not needed, since it's called more frequently by updateTimes()
+// $player.addEventListener("timeupdate", drawPlayerLine);
 
 const $wave = $("wave");
 $wave.addEventListener("mousedown", e => {
@@ -847,7 +852,7 @@ $wave.addEventListener("mousedown", e => {
     if (isNaN(dur)) return;
     const rect = $wave.getBoundingClientRect();
     playerMoveTo(dur * clip01((e.clientX-rect.left) / rect.width));
-    drawPlayerLine();
+    updateTimes();
   };
   stopEvent(e);
   const up = e => {
@@ -1496,10 +1501,6 @@ const beats = (()=>{
 })();
 
 // ---- initialization --------------------------------------------------------
-
-// Hack these to fit to right side of parent
-[...document.getElementsByClassName("fill-right")].forEach(e =>
-  e.style.width = (e.parentElement.offsetWidth - e.offsetLeft - 16)+"px");
 
 const init = data => {
   all = data;
