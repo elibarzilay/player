@@ -1068,7 +1068,8 @@ search.results = [];
 
 const searchKey = e => {
   const { key, code, shiftKey: shift, ctrlKey: ctrl } = e;
-  if (key === "Enter" || code === "Backslash" || code.startsWith("Numpad")
+  if (key === "Enter") { $.selected.focus(); return; }
+  if (code === "Backslash" || code.startsWith("Numpad")
       || ((shift || ctrl) && (key === " " || code.startsWith("Digit"))))
     return;
   e.stopImmediatePropagation();
