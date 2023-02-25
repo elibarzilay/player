@@ -484,7 +484,7 @@ const bind = (keys, op, filter) =>
   });
 bind.keys = new Map();
 bind.handler = e => {
-  if (bind.prehook && bind.prehook(e)) return;
+  if (bind.prehook?.(e)) return;
   const bs = bind.keys.get(e.key) || bind.keys.get(e.code);
   if (!bs) return;
   for (const b of bs) {
@@ -1089,86 +1089,102 @@ $search.addEventListener("keydown", searchKey);
 
 // ---- quick search ----------------------------------------------------------
 
-const quickSearch = str => {
-  str = str.toLowerCase();
-  const r = new Range(); let first = null;
-  if (quickSearch.items) quickSearch.clear();
-  quickSearch.items = [];
-  const items = visibleItems(), start = items.indexOf(quickSearch.startItem);
-  if (start > -1)
-    items.push(...items.splice(0, (start + 1) % items.length));
-  for (const search of [`^${str}`, `\\b${str}`, `${str}`,
-                        str.split("").join(".*?")]) {
-    const rx = new RegExp(search, "id");
-    items.forEach(item => {
-      const p = rx.exec(getInfo(item).name)?.indices[0];
-      if (!p) return;
-      const children = item.childNodes;
-      if (children.length !== 1 || children[0].nodeType !== Node.TEXT_NODE)
-        throw Error(`unexpected childNodes`);
-      const c = children[0];
-      quickSearch.items.push(item);
-      r.setStart(c, p[0]); r.setEnd(c, p[1]);
-      r.surroundContents(document.createElement("mark"));
-      if (!first) first = item;
-    });
-    if (first) {
-      first.scrollIntoView({
-        behavior: "auto", block: "nearest", inline: "nearest" });
-      first.focus();
-      focusItemHandler(first);
-      return;
+{
+  let curItems = null, startItem = null, curStr = "";
+  let searchTimer = null, exitTimer = null;
+  const quickSearch = str => {
+    str = str.toLowerCase();
+    const r = new Range(); let first = null;
+    if (curItems) clear();
+    curItems = [];
+    const items = visibleItems(), start = items.indexOf(startItem);
+    if (start > -1)
+      items.push(...items.splice(0, (start + 1) % items.length));
+    for (const search of [
+      `^${str}`, `\\b${str}`, `${str}`, // beginning, word start, anywhere
+      str.split(/ +/).map(w => w.split("").join("[^ ]*")).join(".*"), // words
+      str.split("").join(".*?"),                                   // anything
+    ]) {
+      const rx = new RegExp(search, "id");
+      items.forEach(item => {
+        const p = rx.exec(getInfo(item).name)?.indices[0];
+        if (!p) return;
+        const children = item.childNodes;
+        if (children.length !== 1 || children[0].nodeType !== Node.TEXT_NODE)
+          throw Error(`unexpected childNodes`);
+        const c = children[0];
+        curItems.push(item);
+        r.setStart(c, p[0]); r.setEnd(c, p[1]);
+        r.surroundContents(document.createElement("mark"));
+        if (!first) first = item;
+      });
+      if (first) return focusOn(first);
     }
+  };
+  const focusOn = elt => {
+    elt.scrollIntoView({ behavior: "auto", block: "nearest", inline: "nearest" });
+    elt.focus();
+  };
+  const clear = ()=> {
+    curItems?.forEach(item =>
+      item.replaceChildren(document.createTextNode(getInfo(item).name)));
+    curItems = null;
+  };
+  const delayExit = ()=> {
+    clearTimeout(exitTimer);
+    exitTimer = timeout(2000, doStop);
   }
-};
-quickSearch.clear = ()=> {
-  quickSearch.items?.forEach(item =>
-    item.replaceChildren(document.createTextNode(getInfo(item).name)));
-  quickSearch.items = null;
-};
-quickSearch.str = "";
-quickSearch.key = key => {
-  quickSearch.str =
-    key === "DEL" ? quickSearch.str.slice(0,-1)
-    : quickSearch.str + (key === "-" ? "–" : key);
-  clearTimeout(quickSearch.timer);
-  quickSearch.timer = timeout(300, ()=> {
-    quickSearch(quickSearch.str);
-    if (quickSearch.str === "") quickSearch.stop();
-    else quickSearch.timer = timeout(10000, quickSearch.stop);
-  });
-};
-quickSearch.handler = ({ key }) => {
-  // normal use keys
-  if (["Arrow", "Numpad", "Page", "Home", "End"]
-      .some(pfx => key.startsWith(pfx))) {
+  const doKey = key => {
+    curStr = key === "DEL" ? curStr.slice(0,-1)
+             : curStr + (key === "-" ? "–" : key);
+    clearTimeout(searchTimer);
+    searchTimer = timeout(300, ()=> {
+      if (curStr === "") return doStop();
+      quickSearch(curStr);
+      delayExit();
+    });
+    return true;
+  };
+  const moveNext = delta => {
+    delayExit();
+    focusOn(curItems[mod(curItems.indexOf($.selected) + delta,
+                         curItems.length)]);
+    return true;
+  };
+  const delKeys    = "Backspace Delete".split(" ");
+  const ignoreKeys =
+    "Shift Control Alt Meta CapsLock NumLock ScrollLock".split(" ");
+  const handler = e => {
+    const { key } = e;
+    e.preventDefault();
+    if (curItems?.length && curItems.length > 1) { // moves w/ multiple matches
+      if (key === "ArrowUp")   return moveNext(-1);
+      if (key === "ArrowDown") return moveNext(+1);
+    }
+    if (delKeys.includes(key))                    return doKey("DEL");
+    if (/^[ \-\p{L}\p{N}\p{P}\p{S}]$/u.test(key)) return doKey(key);
+    if (ignoreKeys.includes(key))                 return;
+    // anything else terminates the search and used normally
+    doStop();
     return false;
-  }
-  // terminate search, then normal use
-  if (["Enter", "/", "Tab"].includes(key)) {
-    quickSearch(quickSearch.str, true);
-    quickSearch.stop();
-    return false;
-  }
-  if (["Backspace", "Delete"].includes(key)) quickSearch.key("DEL");
-  if (/^[ \-\p{L}\p{N}\p{S}]$/u.test(key))   quickSearch.key(key);
-  return true;
-};
-quickSearch.start = ({ key }) => {
-  quickSearch.str = "";
-  quickSearch.startItem = $.selected;
-  quickSearch.key(key);
-  bind.prehook = quickSearch.handler;
-};
-quickSearch.stop = ()=> {
-  clearTimeout(quickSearch.timer);
-  quickSearch.str = "";
-  quickSearch.startItem = null;
-  quickSearch.clear();
-  bind.prehook = null;
-};
-bind("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(l => "Key"+l),
-     quickSearch.start, noCtrlAlt);
+  };
+  const doStart = ({ key }) => {
+    curStr = "";
+    startItem = $.selected;
+    doKey(key);
+    bind.prehook = handler; // start won't be called too!
+  };
+  const doStop = ()=> {
+    clearTimeout(searchTimer);
+    clearTimeout(exitTimer);
+    curStr = "";
+    startItem = null;
+    clear();
+    bind.prehook = null;
+  };
+  bind("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(l => "Key"+l),
+       doStart, noCtrlAlt);
+}
 
 // ---- audio wiring ----------------------------------------------------------
 
