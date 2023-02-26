@@ -205,6 +205,30 @@ body.flashy .control { background: var(--volcolor); }
   opacity: 0.001; transition: opacity 1s linear;
 }
 
+.overlay {
+  display: none; z-index: 2; position: fixed; place-items: center;
+  left: 10vw; top: 10vh; width: 80vw; height: 80vh;
+  border-radius: 2vmin; background-color: #323e;
+  overflow: hidden scroll;
+}
+.overlay.on { display: grid; }
+
+#overlay-bg {
+  display: none; z-index: 1; position: fixed;
+  left: 0; top: 0; width: 100vw; height: 100vh;
+  backdrop-filter: saturate(0.5) brightness(0.5) blur(5px);
+}
+#overlay-bg.on { display: block; }
+
+#select-device a {
+  display: block; margin: 1ex; padding: 1ex 2ex; cursor: pointer;
+  background-color: #0008; border-radius: 5px;
+  font-size: 150%; font-weight: bold; transition: background-color 300ms;
+  text-shadow: 2px 2px 4px #ccca;
+}
+#select-device a:hover { background-color: #4448; }
+
+
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track {
   background: #6243; border-radius: 8px; box-shadow: inset 0 0 4px #0004; }

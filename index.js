@@ -39,9 +39,9 @@ const shuffle = xs => {
 };
 
 const addLazyProp = (o, name, get) =>
-  Object.defineProperty(o, name, {configurable: true, get: ()=> {
+  Object.defineProperty(o, name, { configurable: true, get: ()=> {
     const value = get(o);
-    Object.defineProperty(o, name, {value, writable: true});
+    Object.defineProperty(o, name, { value, writable: true });
     return value;
   }});
 
@@ -602,18 +602,22 @@ addDragEvents($main, (e, d) => plistDelete(d), e => !isMainItem($drag));
 
 // ---- toggles ---------------------------------------------------------------
 
-const mkToggle = (id, cb = null, h = null) => {
+const mkToggle = (id, cb = null, opts = {}) => {
   const elt = $(id);
   const toggle = e => {
-    if (h && h(e)) return;
+    if (opts.preHandler?.(e)) return;
     elt.classList.toggle("on", (toggle.on = !toggle.on));
-    message(`${elt.title}: ${toggle.on ? "on" : "off"}`);
+    if (!opts?.noMessage) message(`${elt.title}: ${toggle.on ? "on" : "off"}`);
     if (cb) cb(toggle.on);
   };
   toggle.on = elt.classList.contains("on");
   elt.addEventListener("click", toggle);
   return toggle;
 };
+const deviceSel  = mkToggle("device", on => {
+  if (on) audio.device.populateSelector();
+  showOverlay($("select-device"), on, deviceSel);
+}, { noMessage: true });
 const loopMode   = mkToggle("loop");
 const fftvizMode = mkToggle("fftviz");
 const wavvizMode = mkToggle("wavviz");
@@ -621,8 +625,28 @@ const bigvizMode = mkToggle("bigviz", on =>
   document.documentElement.classList.toggle("bigviz", on));
 const flashyMode = mkToggle("flashy",
   on => document.body.classList.toggle("flashy", on),
-  e => e?.shiftKey && (mkFlashyWindow(), true));
+  { preHandler: e => e?.shiftKey && (mkFlashyWindow(), true) });
 const beatMode   = mkToggle("beatmode");
+
+// ---- overlays --------------------------------------------------------------
+
+const showOverlay = (()=> {
+  const listeners = new Map();
+  let curOff = null;
+  const show = (elt, on = true, offOp = null) => {
+    if (elt.classList.contains("on") === on) return;
+    if (on && curOff) curOff();
+    elt.classList.toggle("on", on);
+    $("overlay-bg").classList.toggle("on", on);
+    curOff = !on ? null
+      : offOp || (()=> showOverlay(elt, false));
+  }
+  show.dismiss = ()=> curOff?.();
+  return show;
+})();
+
+$("overlay-bg").addEventListener("click", showOverlay.dismiss);
+bind("Escape", showOverlay.dismiss);
 
 // ---- player interactions ---------------------------------------------------
 
@@ -1191,11 +1215,67 @@ $search.addEventListener("keydown", searchKey);
        doStart, noCtrlAlt);
 }
 
+// ---- device switching ------------------------------------------------------
+
+const makeDeviceSwitcher = ()=> {
+  const getDevices = async ()=> {
+    await navigator.mediaDevices.getUserMedia({audio: true}); // get permission
+    return (await navigator.mediaDevices.enumerateDevices())
+      .filter(d => d.kind === "audiooutput");
+  };
+  const list = ()=>
+    getDevices().then(ds => ds.forEach(d =>
+      console.log(`${d.label} (${d.deviceId})`)));
+  let devAudio = null, devDest = null;
+  const use = async idOrName => {
+    const findDevice = async p =>
+      (findDevice.list ??= await getDevices()).find(p);
+    const d =
+      !idOrName || idOrName === "default" ? null
+      : (await findDevice(d => d.deviceId === idOrName)
+         || await findDevice(d =>
+              d.label.toLowerCase().includes(idOrName.toLowerCase())))
+    if (d === undefined) throw Error(`No "${idOrName}" device found`);
+    // doesn't work when it's a source in `createMediaElementSource`
+    //   (https://github.com/w3c/mediacapture-output/issues/87)
+    // await $player.setSinkId(d.deviceId);
+    if (!devAudio === !!d) {
+      if (devAudio) {
+        audio.out.disconnect(devDest);
+        audio.out.connect(audio.ctx.destination);
+        devAudio = null;
+      } else {
+        devAudio = new Audio();
+        devDest = audio.ctx.createMediaStreamDestination();
+        devAudio.srcObject = devDest.stream;
+        audio.out.disconnect(audio.ctx.destination);
+        audio.out.connect(devDest);
+        devAudio.play();
+      }
+    }
+    console.log(`Connecting to ${d ? d.label : "default"}`);
+    if (d) devAudio.setSinkId(d.deviceId);
+  };
+  let devices = null;
+  $("select-device").addEventListener("click", e => {
+    e.stopPropagation();
+    const id = e.target.dataset?.id;
+    if (id) { use(id); deviceSel(); }
+  });
+  const populateSelector = async ()=> {
+    devices ??= await getDevices();
+    $("select-device").innerHTML = `<div>${
+      devices.map(d => `<a data-id="${d.deviceId}">${d.label}</a>`).join("")
+    }</div>`;
+  };
+  return { list, use, populateSelector };
+};
+
 // ---- audio wiring ----------------------------------------------------------
 
 const SIDES = [0, 1];
 const audio = (()=>{
-  const c = new AudioContext();
+  const c = new AudioContext({ latencyHint: "playback" });
   const src = c.createMediaElementSource($player);
   const gain = c.createGain();
   const splitter = c.createChannelSplitter(2);
@@ -1245,38 +1325,10 @@ const audio = (()=>{
       effectNodes.push(...nodes);
     }
   };
-  // experimental
-  const getDevices = async ()=> {
-    await navigator.mediaDevices.getUserMedia({audio: true}); // get permission
-    return (await navigator.mediaDevices.enumerateDevices())
-      .filter(d => d.kind === "audiooutput");
-  };
-  const showDevices = ()=>
-    getDevices().then(ds => ds.forEach(d =>
-      console.log(`${d.label} (${d.deviceId})`)));
-  let devAudio = null;
-  const useDevice = async name => {
-    const d = (await getDevices())
-      .find(d => d.label.toLowerCase().includes(name.toLowerCase()));
-    if (!d) throw Error(`No "${name}" device found`);
-    // doesn't work when it's a source in `createMediaElementSource`
-    //   (https://github.com/w3c/mediacapture-output/issues/87)
-    // await $player.setSinkId(d.deviceId);
-    if (!devAudio) {
-      devAudio = new Audio();
-      const devDest = c.createMediaStreamDestination();
-      devAudio.srcObject = devDest.stream;
-      gain.disconnect(c.destination);
-      gain.connect(devDest);
-      devAudio.play();
-    }
-    console.log(`Connecting to ${d.label}`);
-    devAudio.setSinkId(d.deviceId);
-  };
   //
   return {
-    ctx: c, resume: c.resume.bind(c), setGain, analyzers, effects,
-    device: { list: showDevices, use: useDevice },
+    ctx: c, out: gain, resume: c.resume.bind(c), setGain, analyzers, effects,
+    device: makeDeviceSwitcher(),
   };
 })();
 
