@@ -498,6 +498,15 @@ const noCtrl    = e => !e.ctrlKey;
 const noAlt     = e => !e.altKey;
 const noCtrlAlt = e => !e.ctrlKey && !e.altKey;
 
+const $help = document.createElement("pre");
+$("help-text").append($help);
+const help = (...lines) => $help.innerHTML += `<div class="entry">${
+  lines.map(line =>
+    line.replace(/[<>]/g, m => m === "<" ? "<key>" : "</key>"))
+    .join("\n")
+}</div>`;
+bind("?", ()=> helpSel());
+
 // ---- playlist --------------------------------------------------------------
 
 const switchMain = ()=> $.altitem && $.altitem.focus();
@@ -618,6 +627,9 @@ const deviceSel  = mkToggle("device", on => {
   if (on) audio.device.populateSelector();
   showOverlay($("select-device"), on, deviceSel);
 }, { noMessage: true });
+const helpSel  = mkToggle("help", on =>
+  showOverlay($("help-text"), on, helpSel),
+  { noMessage: true });
 const loopMode   = mkToggle("loop");
 const fftvizMode = mkToggle("fftviz");
 const wavvizMode = mkToggle("wavviz");
@@ -651,22 +663,32 @@ bind("Escape", showOverlay.dismiss);
 // ---- player interactions ---------------------------------------------------
 
 bind("Enter", mainOrPlistOp, noAlt);
+help(`<⏎>: play selected track or open selected file`,
+     `  dir: sublist focus, shift: toggle`,
+     `  ctrl: add to playlist and play, playlist: reveal and focus track`);
 bind("Tab", switchMain, noCtrlAlt);
+help(`<⇥>: switch between main and playlist panes`);
 
 const initiateSearch = e => {
   if (e) $search.value = e.key; else $search.select();
   $search.focus(); }
 bind("/", ()=> initiateSearch(), noCtrlAlt);
+help(`</>: start a full search`);
 
 bind(["Backspace", "Delete"], e => plistDelete(e.key === "Backspace"));
+help(`<⌫>⋅<⌦>: remove track from playlist`);
 
 bind("+", ()=> expandDir(U, true),   noCtrlAlt);
 bind("-", ()=> expandDir(U, false),  noCtrlAlt);
 bind("*", ()=> expandDir(U, "deep"), noCtrlAlt);
+help(`<+>⋅<*>⋅<->: subdir expand / deep-expand / close`);
 
 bind("\\", bigvizMode);
+help(`<\\>: big visualization mode`);
 bind("|",  ()=> flashyMode()); // avoid shift opening a window
+help(`<|>: color flashing mode`);
 bind(".",  beatMode);
+help(`<.>: beat movement mode`);
 
 bind("ArrowUp",   e => selectNext(U, -1, {move: e.ctrlKey}));
 bind("ArrowDown", e => selectNext(U, +1, {move: e.ctrlKey}));
@@ -674,10 +696,16 @@ bind("PageUp",    e => selectNext(U, -pgSize, {wrap: false, move: e.ctrlKey}));
 bind("PageDown",  e => selectNext(U, +pgSize, {wrap: false, move: e.ctrlKey}));
 bind("Home",      e => selectEdge(+1, {move: e.ctrlKey}));
 bind("End",       e => selectEdge(-1, {move: e.ctrlKey}));
+help(`<⇧>⋅<⇩>⋅<⇞>⋅<⇟>⋅<⇱>⋅<⇲>: list navigation`,
+     `  ctrl: move playlist track`);
 
 bind([" ", "Numpad5"], playerPlayPause);
+help(`<Spc>⋅<Pad5>: play / pause`);
 bind("ArrowLeft",      playerMove(-1));
 bind("ArrowRight",     playerMove(+1));
+help(`<⇦>⋅<⇨>: move in track (5s)`,
+     `  ctrl: big skip (1m)`,
+     `  shft: small skip (½)`);
 [[null,      "p-pause", "pause",         playerPause],
  [null,      "p-play",  "play",          playerPlay],
  [null,      "p-stop",  "stop",          playerStop],
@@ -690,6 +718,8 @@ bind("ArrowRight",     playerMove(+1));
   if (id)    $(id).addEventListener("click", handler);
   if (media) navigator.mediaSession.setActionHandler(media, handler);
 });
+help(`<Pad4>⋅<Pad6>: next / prev track`);
+help(`<Pad1>⋅<Pad3>: big move (×2)`);
 
 const markers = new Map();
 const markerJump = e => {
@@ -709,6 +739,8 @@ const markerJump = e => {
   }
 };
 bind("0123456789".split("").map(d => "Digit"+d), markerJump);
+help(`<1>⋅<2>⋅…⋅<0>: move to percentage`,
+     `  ctrl: set marker`);
 
 $player.defaultVolume = 1; // made up field
 const $volume = $("volume"), $volumeMax = +$volume.max;
@@ -728,6 +760,8 @@ bind("Numpad8", ()=> updateVolume(+$volume.value + 1), noCtrl);
 bind("Numpad8", ()=> updateGain(+$gain.value + 0.25),  withCtrl);
 bind("Numpad2", ()=> updateVolume(+$volume.value - 1), noCtrl);
 bind("Numpad2", ()=> updateGain(+$gain.value - 0.25),  withCtrl);
+help(`<Pad8>⋅<Pad2>: volume up / down`,
+     `  ctrl: gain up / down`);
 
 $player.defaultPlaybackRate = 1;
 const $rate = $("rate"), $rateMax = +$rate.max;
@@ -750,6 +784,7 @@ $rate.addEventListener("wheel", e => {
 bind(["Numpad9", ">", "]"], ()=> updateRate(+$rate.value + 1));
 bind(["Numpad7", "<", "["], ()=> updateRate(+$rate.value - 1));
 bind(["="], ()=> updateRate($rateMax/2));
+help(`<Pad7>⋅<Pad9>⋅<=>: slower / faster / normal playback`);
 
 const $gain = $("gain"), $gainMax = +$gain.max;
 $gain.value = 1;
@@ -1214,6 +1249,7 @@ $search.addEventListener("keydown", searchKey);
   bind("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(l => "Key"+l),
        doStart, noCtrlAlt);
 }
+help(`<A>⋅<B>⋅…⋅<Z>: quick search visible items`);
 
 // ---- device switching ------------------------------------------------------
 

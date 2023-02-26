@@ -228,6 +228,13 @@ body.flashy .control { background: var(--volcolor); }
 }
 #select-device a:hover { background-color: #4448; }
 
+#help-text pre {
+  background-color: #4448; padding: 1ex 2ex; border-radius: 5px; tab-size: 25;
+}
+#help-text key {
+  background-color: #6668; padding: 1px 2px; margin: 0 2px; border-radius: 2px;
+}
+#help-text .entry { margin: 4px 0; }
 
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track {
