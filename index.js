@@ -50,6 +50,10 @@ const wheelToN = (e, n1, n2, dflt) =>
    : e.deltaX > 0 ? +n2 : e.deltaX < 0 ? -n2
    : dflt);
 
+const scrollIntoView = elt =>
+  elt.scrollIntoView({
+    behavior: "auto", block: "nearest", inline: "nearest" });
+
 ["selected", "player", "altitem", "dragitem"].forEach(prop => {
   let item; Object.defineProperty($, prop, {
     get: ()=> item,
@@ -291,7 +295,7 @@ const playerPlay = ()=> {
     .then(visualizer.start)
     .catch(e => { if (e.code !== e.ABORT_ERR) throw e; });
 };
-const playerPlayPause = ({ctrlKey}) =>
+const playerPlayPause = ({ ctrlKey }) =>
     ctrlKey                           ? playerStop()
   : $player.paused || $player.pausing ? playerPlay()
   :                                     playerPause();
@@ -315,7 +319,7 @@ const playerMoveTo = time => {
     else fetchBeats($player.info).then(beats.moveTo(time));
   }
 };
-const playerMove = dir => ({shiftKey, ctrlKey}) => {
+const playerMove = dir => ({ shiftKey, ctrlKey }) => {
   const delta = dir * (ctrlKey ? bigSkip : smallSkip)
                     / (shiftKey ? smallerSkipDiv : 1);
   if ($player.leftoverMove) $player.leftoverMove += delta;
@@ -330,7 +334,7 @@ const playerNextPrev = down => {
       searchNext(1, loopMode.on);
     item = search.origin && search.origin.elt;
   } else {
-    do { item = nextItem(item, down, {wrap: loopMode.on}); }
+    do { item = nextItem(item, down, { wrap: loopMode.on }); }
     while (item && item !== $.player && getInfo(item).type !== "audio");
   }
   play(item);
@@ -363,7 +367,7 @@ const isHidden = elt => elt.offsetParent === null;
 const isTop    = elt => elt === $main || elt === $plist;
 
 const nextItem = (elt, down, opts = {}) => {
-  const {wrap = true, sub = true, different = false} = opts;
+  const { wrap = true, sub = true, different = false } = opts;
   const [xSibling, xChild] =
     down ? [e => e.nextElementSibling,     e => e.firstElementChild]
          : [e => e.previousElementSibling, e => e.lastElementChild];
@@ -377,7 +381,7 @@ const nextItem = (elt, down, opts = {}) => {
     : isHidden(elt) ? loopUp(elt)
     : isItem(elt) ? elt
     : loopDn(xChild(elt));
-  const start  = (!sub && getInfo(elt).type === "dir") ? elt.parentElement : elt;
+  const start  = !sub && getInfo(elt).type === "dir" ? elt.parentElement : elt;
   const result = loopUp(start);
   return (!different || result !== start) ? result : null;
 };
@@ -533,7 +537,7 @@ const plistOp = (e, elt = $.selected, info = getInfo(elt), dragTo) => {
     :                         play($.altitem = render(info));
   add(info);
   if (e instanceof KeyboardEvent)
-    selectNext(U, +1, {wrap: false, sub: false});
+    selectNext(U, +1, { wrap: false, sub: false });
 };
 
 const plistDelete = backOrElt => {
@@ -545,9 +549,9 @@ const plistDelete = backOrElt => {
   const newSel = back ? item
     : item.nextElementSibling || item.previousElementSibling || $.altitem;
   const [prev, next] = [false, true].map(d =>
-    nextItem(toDelete, d, {different: true}));
+    nextItem(toDelete, d, { different: true }));
   if (toDelete === $.player) {
-    $.player = {previousElementSibling: prev, nextElementSibling: next};
+    $.player = { previousElementSibling: prev, nextElementSibling: next };
     infoMap.set($.player, getInfo(toDelete));
   } else if ($.player && !($.player instanceof Element)) {
     if ($.player.nextElementSibling === toDelete)
@@ -690,12 +694,12 @@ help(`<|>: color flashing mode`);
 bind(".",  beatMode);
 help(`<.>: beat movement mode`);
 
-bind("ArrowUp",   e => selectNext(U, -1, {move: e.ctrlKey}));
-bind("ArrowDown", e => selectNext(U, +1, {move: e.ctrlKey}));
-bind("PageUp",    e => selectNext(U, -pgSize, {wrap: false, move: e.ctrlKey}));
-bind("PageDown",  e => selectNext(U, +pgSize, {wrap: false, move: e.ctrlKey}));
-bind("Home",      e => selectEdge(+1, {move: e.ctrlKey}));
-bind("End",       e => selectEdge(-1, {move: e.ctrlKey}));
+bind("ArrowUp",   e => selectNext(U, -1, { move: e.ctrlKey }));
+bind("ArrowDown", e => selectNext(U, +1, { move: e.ctrlKey }));
+bind("PageUp",    e => selectNext(U, -pgSize, { wrap: false, move: e.ctrlKey }));
+bind("PageDown",  e => selectNext(U, +pgSize, { wrap: false, move: e.ctrlKey }));
+bind("Home",      e => selectEdge(+1, { move: e.ctrlKey }));
+bind("End",       e => selectEdge(-1, { move: e.ctrlKey }));
 help(`<⇧>⋅<⇩>⋅<⇞>⋅<⇟>⋅<⇱>⋅<⇲>: list navigation`,
      `  ctrl: move playlist track`);
 
@@ -723,7 +727,7 @@ help(`<Pad1>⋅<Pad3>: big move (×2)`);
 
 const markers = new Map();
 const markerJump = e => {
-  const {key, code, ctrlKey: ctrl} = e;
+  const { key, code, ctrlKey: ctrl } = e;
   const n = +e.code.substring(code.length-1);
   if (ctrl) {
     let m = markers.get($player.info);
@@ -1098,8 +1102,7 @@ const showCurSearch = ()=> {
   }
   const cur = search.results[search.cur];
   isHidden(cur.elt) ? showOnly(cur, false) : focusItemHandler(cur.elt);
-  cur.elt.scrollIntoView({
-    behavior: "auto", block: "nearest", inline: "nearest" });
+  scrollIntoView(cur.elt);
   $("result-number").innerText = (search.cur + 1) + "/" + len;
   return cur;
 };
@@ -1186,7 +1189,7 @@ $search.addEventListener("keydown", searchKey);
     }
   };
   const focusOn = elt => {
-    elt.scrollIntoView({ behavior: "auto", block: "nearest", inline: "nearest" });
+    scrollIntoView(elt);
     elt.focus();
   };
   const clear = ()=> {
@@ -1255,7 +1258,7 @@ help(`<A>⋅<B>⋅…⋅<Z>: quick search visible items`);
 
 const makeDeviceSwitcher = ()=> {
   const getDevices = async ()=> {
-    await navigator.mediaDevices.getUserMedia({audio: true}); // get permission
+    await navigator.mediaDevices.getUserMedia({ audio: true }); // permission
     return (await navigator.mediaDevices.enumerateDevices())
       .filter(d => d.kind === "audiooutput");
   };
@@ -1314,17 +1317,8 @@ const audio = (()=>{
   const c = new AudioContext({ latencyHint: "playback" });
   const src = c.createMediaElementSource($player);
   const gain = c.createGain();
-  const splitter = c.createChannelSplitter(2);
   src.connect(gain);
   gain.connect(c.destination);
-  gain.connect(splitter);
-  const analyzers = SIDES.map(i => {
-    const a = c.createAnalyser();
-    a.smoothingTimeConstant = analyzerSmoothing;
-    a.fftSize = 2 * analyzerBins;
-    splitter.connect(a, i);
-    return a;
-  });
   const setGain = g => gain.gain.value = g;
   // experimental effects to play with (see the "experiments" directory)
   const effectNodes = []; // nodes between src and gain
@@ -1363,7 +1357,7 @@ const audio = (()=>{
   };
   //
   return {
-    ctx: c, out: gain, resume: c.resume.bind(c), setGain, analyzers, effects,
+    ctx: c, out: gain, resume: c.resume.bind(c), setGain, effects,
     device: makeDeviceSwitcher(),
   };
 })();
@@ -1372,7 +1366,17 @@ const audio = (()=>{
 
 const visualizer = (()=>{
   const r = {};
-  const analyzers = audio.analyzers;
+  //
+  const splitter = audio.ctx.createChannelSplitter(2);
+  audio.out.connect(splitter);
+  const analyzers = SIDES.map(i => {
+    const a = audio.ctx.createAnalyser();
+    a.smoothingTimeConstant = analyzerSmoothing;
+    a.fftSize = 2 * analyzerBins;
+    splitter.connect(a, i);
+    return a;
+  });
+  //
   const bufLen = analyzers[0].frequencyBinCount, aData = new Uint8Array(bufLen);
   const $c = $("visualization");
   const vizListeners = new Set();
@@ -1393,7 +1397,8 @@ const visualizer = (()=>{
   const draw = ()=> {
     if (!playState) return;
     requestAnimationFrame(draw);
-    if (!$player.paused) playState = true; else {
+    if (!$player.paused) playState = true;
+    else {
       const t = now();
       if (playState === true) playState = t;
       else if (t > playState + 2000) return playState = null;
@@ -1405,7 +1410,8 @@ const visualizer = (()=>{
     fade("#0004");
     const W = $c.width, H = $c.height, w = W / bufLen / 2;
     let avg1 = 0, avg2 = 0;
-    if (!fftvizMode.on) avg1 = 0.5; else {
+    if (!fftvizMode.on) avg1 = 0.5;
+    else {
       const c1 = hsl(-80*r.vol2, 100, 75*r.vol1,     75); // values from
       const c2 = hsl( 80*r.vol2, 100, 75*r.vol1+25, 100); // last round
       for (const side of SIDES) {
@@ -1426,7 +1432,8 @@ const visualizer = (()=>{
       }
       avg1 = clip01(avg1 / bufLen / 2 / 128);
     }
-    if (!wavvizMode.on) avg2 = 0.5; else {
+    if (!wavvizMode.on) avg2 = 0.5;
+    else {
       c.strokeStyle = "#8f4f"; c.lineWidth = bigvizMode.on ? 4 : 2;
       c.lineJoin = "bevel"; c.lineCap = "round";
       for (const side of SIDES) {
