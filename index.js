@@ -646,23 +646,26 @@ const beatMode   = mkToggle("beatmode");
 
 // ---- overlays --------------------------------------------------------------
 
-const showOverlay = (()=> {
-  const listeners = new Map();
-  let curOff = null;
-  const show = (elt, on = true, offOp = null) => {
-    if (elt.classList.contains("on") === on) return;
-    if (on && curOff) curOff();
-    elt.classList.toggle("on", on);
-    $("overlay-bg").classList.toggle("on", on);
-    curOff = !on ? null
-      : offOp || (()=> showOverlay(elt, false));
-  }
-  show.dismiss = ()=> curOff?.();
-  return show;
-})();
+const showOverlay = (elt, on = true, offOp = null) => {
+  if (elt.classList.contains("on") === on) return;
+  if (on && showOverlay.off) showOverlay.off();
+  elt.classList.toggle("on", on);
+  $("overlay-bg").classList.toggle("on", on);
+  showOverlay.off = !on ? null
+    : offOp || (()=> showOverlay(elt, false));
+};
+$("overlay-bg").addEventListener("click", ()=> showOverlay.off?.());
 
-$("overlay-bg").addEventListener("click", showOverlay.dismiss);
-bind("Escape", showOverlay.dismiss);
+// ---- generic escape handler ------------------------------------------------
+
+const escapeHandler = ()=> {
+  if (showOverlay.off) return showOverlay.off();
+  if (flashyMode.on) return flashyMode();
+  if (bigvizMode.on) return bigvizMode();
+};
+bind("Escape", escapeHandler);
+document.querySelectorAll(".under").forEach(u =>
+  u.addEventListener("click", escapeHandler));
 
 // ---- player interactions ---------------------------------------------------
 
@@ -689,7 +692,7 @@ help(`<+>⋅<*>⋅<->: subdir expand / deep-expand / close`);
 
 bind("\\", bigvizMode);
 help(`<\\>: big visualization mode`);
-bind("|",  ()=> flashyMode()); // avoid shift opening a window
+bind("|",  ()=> flashyMode()); // | uses shift: avoid a new window
 help(`<|>: color flashing mode`);
 bind(".",  beatMode);
 help(`<.>: beat movement mode`);
@@ -1159,7 +1162,7 @@ $search.addEventListener("keydown", searchKey);
 {
   let curItems = null, startItem = null, curStr = "";
   let searchTimer = null, exitTimer = null;
-  const quickSearch = str => {
+  const quickSearch = (str = curStr) => {
     str = str.toLowerCase();
     const r = new Range(); let first = null;
     if (curItems) clear();
@@ -1207,7 +1210,7 @@ $search.addEventListener("keydown", searchKey);
     clearTimeout(searchTimer);
     searchTimer = timeout(300, ()=> {
       if (curStr === "") return doStop();
-      quickSearch(curStr);
+      quickSearch();
       delayExit();
     });
     return true;
@@ -1231,6 +1234,7 @@ $search.addEventListener("keydown", searchKey);
     if (delKeys.includes(key))                    return doKey("DEL");
     if (/^[ \-\p{L}\p{N}\p{P}\p{S}]$/u.test(key)) return doKey(key);
     if (ignoreKeys.includes(key))                 return;
+    if (key === "Enter") quickSearch(); // finish searching before stopping
     // anything else terminates the search and used normally
     doStop();
     return false;
@@ -1393,6 +1397,7 @@ const visualizer = (()=>{
     c.globalCompositeOperation = "source-over";
   };
   let playState = null; // null, true, or time we started to pause
+  let vol1 = 0, vol2 = 0;
   r.start = ()=> { if (playState === null) { playState = true; draw(); } };
   const draw = ()=> {
     if (!playState) return;
@@ -1412,8 +1417,8 @@ const visualizer = (()=>{
     let avg1 = 0, avg2 = 0;
     if (!fftvizMode.on) avg1 = 0.5;
     else {
-      const c1 = hsl(-80*r.vol2, 100, 75*r.vol1,     75); // values from
-      const c2 = hsl( 80*r.vol2, 100, 75*r.vol1+25, 100); // last round
+      const c1 = hsl(-80*vol2, 100, 75*vol1,     75); // values from
+      const c2 = hsl( 80*vol2, 100, 75*vol1+25, 100); // last round
       for (const side of SIDES) {
         const d = side === 0 ? -1 : +1;
         analyzers[side].getByteFrequencyData(aData);
@@ -1449,14 +1454,14 @@ const visualizer = (()=>{
       }
       avg2 = clip01(avg2 / bufLen / 2 / 64);
     }
-    r.vol1 = avg1; r.vol2 = avg2;
+    vol1 = r.vol = avg1; vol2 = avg2;
     rootS.setProperty("--volume1",  avg1.toFixed(3));
     rootS.setProperty("--volume2",  avg2.toFixed(3));
-    // vol1 is avg of the fft so it's smooth, avg2 is fast-responding
+    // avg1 is avg of the fft so it's smooth, avg2 is fast-responding
     rootS.setProperty("--volcolor", r.col = hsl(80*avg2, 100, 50, 100*avg1));
     vizListeners.forEach(l => l());
   };
-  r.vol1 = r.vol2 = 0; r.col = "black";
+  r.vol = 0; r.col = "black";
   return r;
 })();
 
@@ -1467,7 +1472,7 @@ const mkFlashyWindow = ()=> {
   const body = win.document.body;
   body.parentElement.style.background = "#000";
   const setbg = ()=> body.style.background = visualizer.col;
-  setbg("#000");
+  setbg();
   visualizer.addListener(setbg);
   win.addEventListener("unload", ()=> visualizer.delListener(setbg));
 };
@@ -1555,7 +1560,7 @@ const beats = (()=>{
     const R = antiSpike(1 - abs(2*beat01 - 1)) * (beat % 2 ? 60 : -60);
     eltStyle.transform = `rotate(${R}deg)`;
     const L = spike(1 - beat01);
-    eltStyle.backgroundColor = hsl(120, 100, L * visualizer.vol1 * 80, 50);
+    eltStyle.backgroundColor = hsl(120, 100, L * visualizer.vol * 80, 50);
   };
   //
   let lastBeats = null, beats = null, beat = 0, beat01 = 0, beatMove = null;

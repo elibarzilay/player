@@ -97,7 +97,7 @@ body.flashy .control { background: var(--volcolor); }
 #viz-container { margin: -20% -80px; flex-grow: 1; }
 #visualization { margin-top: 50px; width: 100%; height: 16ex; }
 :root.bigviz #visualization {
-  position: fixed; left: 0; top: 0; width: 100vw; height: 100vh;
+  position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; margin: 0;
   pointer-events: none; opacity: 0.75; z-index: 9;
 }
 
@@ -206,15 +206,15 @@ body.flashy .control { background: var(--volcolor); }
 }
 
 .overlay {
-  display: none; z-index: 2; position: fixed; place-items: center;
+  display: none; z-index: 22; position: fixed; place-items: center;
   left: 10vw; top: 10vh; width: 80vw; height: 80vh;
-  border-radius: 2vmin; background-color: #323e;
+  border-radius: 2vmin; color: #fff; background-color: #323e;
   overflow: hidden scroll;
 }
 .overlay.on { display: grid; }
 
 #overlay-bg {
-  display: none; z-index: 1; position: fixed;
+  display: none; z-index: 21; position: fixed;
   left: 0; top: 0; width: 100vw; height: 100vh;
   backdrop-filter: saturate(0.5) brightness(0.5) blur(5px);
 }
