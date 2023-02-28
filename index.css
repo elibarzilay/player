@@ -94,8 +94,8 @@ body.flashy .control { background: var(--volcolor); }
 
 #sliders { z-index: 2; }
 
-#viz-container { margin: -20% -80px; flex-grow: 1; }
-#visualization { margin-top: 50px; width: 100%; height: 16ex; }
+#viz-container { margin: -20% -10px -20% -150px; flex-grow: 1; }
+#visualization { margin-top: 50px; height: 16ex; width: 100%; }
 :root.bigviz #visualization {
   position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; margin: 0;
   pointer-events: none; opacity: 0.75; z-index: 9;
@@ -107,21 +107,24 @@ body.flashy .control { background: var(--volcolor); }
   border-radius: 5px; padding: 5px; pointer-events: none; white-space: pre;
   top: 0em; right: -8em; opacity: 0; transition: all 0.5s;
 }
-#message.active { top: 2.5em; right: 1em; opacity: 1; color: #fff; }
+#message.active { top: 7em; right: 1em; opacity: 1; color: #fff; }
 
 #track-info { overflow: hidden; position: relative; flex-grow: 1; }
 #track-info > div {
   position: relative; left: 0; white-space: nowrap; display: inline-block;
 }
 
-.toggle { cursor: pointer; filter: brightness(0.3); transition: filter 0.3s;
-          font-size: 150%; }
+.toggle, .nexter { cursor: pointer; transition: all 0.3s; font-size: 150%; }
+.toggle    { filter: brightness(0.3); }
 .toggle.on { filter: brightness(1); }
+.nexter       { color: #ff8; }
+.nexter:hover { color: #fb8; }
 
-#viz-toggles { position: absolute; top: -4px; right: 8px; opacity: 0.25; }
-#viz-toggles > div { font-size: 75%; width: 1.25ex; display: inline-block; }
-#viz-toggles > div:after    { content: "⊙"; }
-#viz-toggles > div.on:after { content: "⦿"; }
+#viz-controls { position: absolute; top: 2px; right: 8px; opacity: 0.5; }
+#viz-controls > div { font-size: 100%; }
+#viz-controls > div:after        { content: "⊙"; }
+#viz-controls > div.on:after     { content: "⦿"; color: #fff; }
+#viz-controls > div.nexter:after { content: "⦿"; }
 
 #flashy { background: var(--volcolor); border-radius: 15%; }
 
@@ -144,7 +147,7 @@ body.flashy .control { background: var(--volcolor); }
 .slider:focus::-webkit-slider-thumb,
 .slider:hover::-webkit-slider-thumb { background: #ff8f; }
 
-#playerbuttons { text-align: center; cursor: default; }
+#playerbuttons { text-align: center; cursor: default; width: 10em; }
 #playerbuttons > div {
   cursor: pointer; display: inline-block; width: 1em; height: 3ex;
 }

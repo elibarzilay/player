@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <title>Eli Music</title>
   <link rel="stylesheet" type="text/css" href=".player/index.css" media="all">
+  <script src=".player/experiments/showcqt.js"></script>
 </head>
 <body>
   <div id="search-panel" class="control">
@@ -34,10 +35,10 @@
       </div>
       <div id="viz-container">
         <canvas id="visualization"></canvas>
-        <div id="viz-toggles">
-          <div id="fftviz" class="toggle on" title="Freqy"></div>
-          <div id="wavviz" class="toggle on" title="Wavy" ></div>
-          <div id="bigviz" class="toggle"    title="Yuge" ></div>
+        <div id="viz-controls">
+          <div id="bigviz"     class="toggle" title="Yuge"      ></div>
+          <div id="vizsubmode" class="nexter" title="VizSubMode"></div>
+          <div id="vizmode"    class="nexter" title="VizMode"   ></div>
         </div>
       </div>
     </div>

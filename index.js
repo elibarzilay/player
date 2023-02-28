@@ -8,7 +8,7 @@ const bigSkip = 60, smallSkip = 5, smallerSkipDiv = 2;
 const fadeToFreq = 20, pauseFade = 0.5, switchFade = 0.25; // time for 0-1 fade
 const imageDelayTime = 2, imageCycleTime = 60, imageExplicitTime = 120;
 const tickerTime = 60, tickerSwapTime = 1;
-const analyzerSmoothing = 0.5, analyzerBins = 512;
+const analyzerSettings = { smoothingTimeConstant: 0.5, fftSize: 2 * 512 };
 
 // ---- utils -----------------------------------------------------------------
 
@@ -26,6 +26,9 @@ const clip01 = x => clipRange(0, x, 1);
 const padL = (s, n, c = "\u2007") =>
   typeof s !== "string" ? padL(String(s), n, c)
   : s.length >= n ? s : c.repeat(n - s.length) + s;
+
+const arrNext = (arr, cur) =>
+  arr[mod(arr.indexOf(cur)+1, arr.length)];
 
 const timeout = (wait, cb) => setTimeout(cb, wait);
 
@@ -635,8 +638,6 @@ const helpSel  = mkToggle("help", on =>
   showOverlay($("help-text"), on, helpSel),
   { noMessage: true });
 const loopMode   = mkToggle("loop");
-const fftvizMode = mkToggle("fftviz");
-const wavvizMode = mkToggle("wavviz");
 const bigvizMode = mkToggle("bigviz", on =>
   document.documentElement.classList.toggle("bigviz", on));
 const flashyMode = mkToggle("flashy",
@@ -691,7 +692,8 @@ bind("*", ()=> expandDir(U, "deep"), noCtrlAlt);
 help(`<+>⋅<*>⋅<->: subdir expand / deep-expand / close`);
 
 bind("\\", bigvizMode);
-help(`<\\>: big visualization mode`);
+help(`<\\>: big visualization mode`,
+     `  ctrl: next visualization, ctrl+shift: next submode`);
 bind("|",  ()=> flashyMode()); // | uses shift: avoid a new window
 help(`<|>: color flashing mode`);
 bind(".",  beatMode);
@@ -1368,60 +1370,30 @@ const audio = (()=>{
 
 // ---- visualizations --------------------------------------------------------
 
-const visualizer = (()=>{
-  const r = {};
-  //
-  const splitter = audio.ctx.createChannelSplitter(2);
-  audio.out.connect(splitter);
-  const analyzers = SIDES.map(i => {
-    const a = audio.ctx.createAnalyser();
-    a.smoothingTimeConstant = analyzerSmoothing;
-    a.fftSize = 2 * analyzerBins;
-    splitter.connect(a, i);
-    return a;
-  });
-  //
+const SimpleViz = ($c, c, fade) => {
+  const analyzers = mkAnalyzers(audio.out);
   const bufLen = analyzers[0].frequencyBinCount, aData = new Uint8Array(bufLen);
-  const $c = $("visualization");
-  const vizListeners = new Set();
-  r.addListener = l => vizListeners.add(l);
-  r.delListener = l => vizListeners.delete(l);
-  const rootS = document.documentElement.style;
-  $c.addEventListener("click", bigvizMode);
-  const c = $c.getContext("2d");
-  const clear = r.clear = ()=> c.clearRect(0, 0, $c.width, $c.height);
-  const fade = fc => {
-    c.globalCompositeOperation = "destination-out";
-    c.fillStyle = fc;
-    c.fillRect(0, 0, $c.width, $c.height);
-    c.globalCompositeOperation = "source-over";
-  };
-  let playState = null; // null, true, or time we started to pause
   let vol1 = 0, vol2 = 0;
-  r.start = ()=> { if (playState === null) { playState = true; draw(); } };
+  let submode = SimpleViz.submode ?? 3;
+  const nextSubmode = ()=> {
+    submode = SimpleViz.submode = mod(submode + 1, 4);
+    message(["None", "FFT", "Wave", "FFT+Wave"][submode]);
+  };
+  const destroy = ()=> analyzers.destroy();
+  //
   const draw = ()=> {
-    if (!playState) return;
-    requestAnimationFrame(draw);
-    if (!$player.paused) playState = true;
-    else {
-      const t = now();
-      if (playState === true) playState = t;
-      else if (t > playState + 2000) return playState = null;
-      else if (t > playState + 1000) return fade("#0002");
-    }
-    if ($c.width  !== $c.clientWidth ) $c.width = $c.clientWidth;
-    if ($c.height !== $c.clientHeight) $c.height = $c.clientHeight;
-    updateTimes();
-    fade("#0004");
+    fade("#0003");
     const W = $c.width, H = $c.height, w = W / bufLen / 2;
     let avg1 = 0, avg2 = 0;
-    if (!fftvizMode.on) avg1 = 0.5;
-    else {
-      const c1 = hsl(-80*vol2, 100, 75*vol1,     75); // values from
-      const c2 = hsl( 80*vol2, 100, 75*vol1+25, 100); // last round
-      for (const side of SIDES) {
+    // fft
+    const c1 = hsl(-80*vol2, 100, 75*vol1,     75); // values from
+    const c2 = hsl( 80*vol2, 100, 75*vol1+25, 100); // last round
+    for (const side of SIDES) {
+      analyzers[side].getByteFrequencyData(aData);
+      if (!(submode & 1)) {
+        for (let i = 0; i < bufLen; i++) avg1 += aData[i];
+      } else {
         const d = side === 0 ? -1 : +1;
-        analyzers[side].getByteFrequencyData(aData);
         for (let i = 0, x = W / 2; i < bufLen; i++, x += d*w) {
           avg1 += aData[i];
           const rx = round(x), rw = round(d*w+d);
@@ -1435,15 +1407,17 @@ const visualizer = (()=>{
           }
         }
       }
-      avg1 = clip01(avg1 / bufLen / 2 / 128);
     }
-    if (!wavvizMode.on) avg2 = 0.5;
-    else {
-      c.strokeStyle = "#8f4f"; c.lineWidth = bigvizMode.on ? 4 : 2;
-      c.lineJoin = "bevel"; c.lineCap = "round";
-      for (const side of SIDES) {
+    avg1 = clip01(avg1 / bufLen / 2 / 128);
+    // wave
+    c.strokeStyle = "#8f4f"; c.lineWidth = bigvizMode.on ? 4 : 2;
+    c.lineJoin = "bevel"; c.lineCap = "round";
+    for (const side of SIDES) {
+      analyzers[side].getByteTimeDomainData(aData);
+      if (!(submode & 2)) {
+        for (let i = 0; i < bufLen; i++) avg2 += abs(aData[i] - 128);
+      } else {
         const d = side === 0 ? -1 : +1;
-        analyzers[side].getByteTimeDomainData(aData);
         c.beginPath();
         for (let i = 0, x = W / 2; i < bufLen; i++, x += d*w) {
           avg2 += abs(aData[i] - 128);
@@ -1452,18 +1426,170 @@ const visualizer = (()=>{
         }
         c.stroke();
       }
-      avg2 = clip01(avg2 / bufLen / 2 / 64);
     }
-    vol1 = r.vol = avg1; vol2 = avg2;
-    rootS.setProperty("--volume1",  avg1.toFixed(3));
-    rootS.setProperty("--volume2",  avg2.toFixed(3));
-    // avg1 is avg of the fft so it's smooth, avg2 is fast-responding
-    rootS.setProperty("--volcolor", r.col = hsl(80*avg2, 100, 50, 100*avg1));
+    avg2 = clip01(avg2 / bufLen / 2 / 64);
+    //
+    return [vol1 = avg1, vol2 = avg2];
+  };
+  return { draw, destroy, nextSubmode };
+};
+
+const CQTViz = ($c, c, fade) => {
+  // https://github.com/mfcc64/showcqt-js#example-code
+  let bar_v = 16, sono_v = 50, wfall = CQTViz.wfall ?? 0.5, curWfall = 0;
+  const waterfalls = [0, 0.5, 1, 2]
+  const nextSubmode = ()=> {
+    wfall = CQTViz.wfall = arrNext(waterfalls, wfall);
+    fadeRate = (255/H2)*wfall; // see fading below
+    message(`Waterfall: ${wfall || "none"}`);
+  };
+  let W = 0, H = 0, W4 = 0, H2 = 0, fadeRate = 0, curFade = 0;
+  let iBuf = null, showcqt = null, analyzers = null;
+  const init = ()=> {
+    analyzers?.destroy();
+    W = $c.width, H = $c.height, W4 = 4*W, H2 = Math.floor(H/2);
+    fadeRate = (255/H2)*wfall; // see fading below
+    iBuf = c.createImageData(W, H);
+    ShowCQT.instantiate().then(cqt => {
+      showcqt = cqt;
+      showcqt.init(audio.ctx.sampleRate, W, H2, bar_v, sono_v, 1);
+      analyzers = mkAnalyzers(audio.out, {
+        ...analyzerSettings, fftSize: showcqt.fft_size
+      });
+    });
+  };
+  init();
+  const destroy = ()=> analyzers.destroy();
+  //
+  const draw = ()=> {
+    if (!showcqt) return;
+    if ($c.width !== W || $c.height !== H) return init(); // let it initialize
+    // fade out, based on how fast is the waterfall and the height
+    if (wfall && (curFade += fadeRate) >= 1) {
+      const fade = Math.floor(curFade);
+      curFade -= fade;
+      for (let i = 3; i < iBuf.data.length; i += 4) iBuf.data[i] -= fade;
+    }
+    for (const side of SIDES)
+      analyzers[side].getFloatTimeDomainData(showcqt.inputs[side]);
+    showcqt.calc();
+    const outLine = showcqt.output;
+    // vol1/vol2: use the average amplitude of the lower and upper halves
+    let vol1 = 0, vol2 = 0, len = outLine.length;
+    for (let i = 3; i < len; i += 4)
+      if (i < len/2) vol1 += outLine[i]; else vol2 += outLine[i];
+    vol1 = clip01(vol1 / (len/8) / 255);
+    vol2 = clip01(vol2 / (len/8) / 255);
+    //
+    for (let y = 0; y < H2; y++) {
+      showcqt.render_line_opaque(y);
+      for (let i = 0; i < W4; i += 4)
+        outLine[i+3] = Math.max(outLine[i+0], outLine[i+1], outLine[i+2]);
+      iBuf.data.set(outLine, W4 * y);
+      if (!wfall) iBuf.data.set(outLine, W4 * (H - 2 - y));
+    }
+    if (wfall && (curWfall += wfall) >= 1) {
+      const wfall = Math.floor(curWfall);
+      curWfall -= wfall;
+      const src = W4 * (H2 - wfall);
+      iBuf.data.copyWithin(W4 * H2, src, W4 * (H - wfall));
+    }
+    c.putImageData(iBuf, 0, 0);
+    // This mirrors the RHS onto the LHS
+    // c.scale(-1,1);
+    // c.clearRect(0, 0, W, H);
+    // c.drawImage($c, W, 0, W, H, -W, 0, W, H);
+    // c.scale(1,1);
+    return [vol1, vol2];
+  };
+  return { draw, destroy, nextSubmode };
+};
+
+const mkAnalyzers = (signal, opts = analyzerSettings) => {
+  const splitter = audio.ctx.createChannelSplitter(2);
+  signal.connect(splitter);
+  const as = SIDES.map(i => {
+    const a = audio.ctx.createAnalyser();
+    Object.assign(a, opts);
+    splitter.connect(a, i);
+    return a;
+  });
+  as.destroy = ()=> {
+    signal.disconnect(splitter);
+    as.forEach(a => a.disconnect());
+  }
+  return as;
+};
+
+const visualizer = (()=>{
+  const r = {};
+  const $c = $("visualization");
+  const vizListeners = new Set();
+  r.addListener = l => vizListeners.add(l);
+  r.delListener = l => vizListeners.delete(l);
+  const rootS = document.documentElement.style;
+  $c.addEventListener("click", bigvizMode);
+  const c = $c.getContext("2d");
+  const clear = r.clear = ()=> {
+    c.clearRect(0, 0, $c.width, $c.height);
+    r.vol = 0; r.col = "black";
     vizListeners.forEach(l => l());
   };
-  r.vol = 0; r.col = "black";
+  const fade = fc => {
+    c.globalCompositeOperation = "destination-out";
+    c.fillStyle = fc;
+    c.fillRect(0, 0, $c.width, $c.height);
+    c.globalCompositeOperation = "source-over";
+  };
+  let playState = null; // null, true, or time we started to pause
+  r.start = ()=> { if (playState === null) { playState = true; draw(); } };
+  const draw = ()=> {
+    if (!playState) return;
+    requestAnimationFrame(draw);
+    if (!$player.paused) playState = true;
+    else {
+      const t = now();
+      if (playState === true) playState = t;
+      else if (t > playState + 5000) { clear(); return playState = null; }
+      else if (t > playState + 4000) return fade("#0001");
+    }
+    if ($c.width  !== $c.clientWidth ) $c.width = $c.clientWidth;
+    if ($c.height !== $c.clientHeight) $c.height = $c.clientHeight;
+    updateTimes();
+    if (curViz) {
+      const d = curViz.draw();
+      if (!d) return;
+      const [vol1, vol2] = d;
+      r.vol = vol1;
+      rootS.setProperty("--volume1",  vol1.toFixed(3));
+      rootS.setProperty("--volume2",  vol2.toFixed(3));
+      // vol1 is avg of the fft so it's smooth, vol2 is fast-responding
+      rootS.setProperty("--volcolor", r.col = hsl(80*vol2, 100, 50, 100*vol1));
+      vizListeners.forEach(l => l());
+    }
+  };
+  //
+  let curViz = null, curMkViz = null;
+  const vizualizers = [null, SimpleViz, CQTViz];
+  const useViz = mkViz => {
+    message(mkViz?.name ?? "NoViz");
+    if (curViz) curViz.destroy();
+    clear();
+    curMkViz = mkViz;
+    curViz = mkViz ? mkViz($c, c, fade) : null;
+  };
+  r.nextViz = ()=> useViz(arrNext(vizualizers, curMkViz));
+  r.nextSubmode = ()=> curViz?.nextSubmode?.();
+  //
+  useViz(SimpleViz);
+  clear();
   return r;
 })();
+
+$("vizmode").addEventListener("click", visualizer.nextViz);
+$("vizsubmode").addEventListener("click", visualizer.nextSubmode);
+bind("\\", visualizer.nextViz, withCtrl);
+bind("|", visualizer.nextSubmode, withCtrl);
 
 const mkFlashyWindow = ()=> {
   const win = window.open(
