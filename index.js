@@ -1219,6 +1219,7 @@ $search.addEventListener("keydown", searchKey);
     delayExit();
     focusOn(curItems[mod(curItems.indexOf($.selected) + delta,
                          curItems.length)]);
+    startItem = $.selected;
     return true;
   };
   const delKeys    = "Backspace Delete".split(" ");
@@ -1231,10 +1232,9 @@ $search.addEventListener("keydown", searchKey);
       if (key === "ArrowUp")   return moveNext(-1);
       if (key === "ArrowDown") return moveNext(+1);
     }
-    if (delKeys.includes(key))                    return doKey("DEL");
-    if (/^[ \-\p{L}\p{N}\p{P}\p{S}]$/u.test(key)) return doKey(key);
-    if (ignoreKeys.includes(key))                 return;
-    if (key === "Enter") quickSearch(); // finish searching before stopping
+    if (delKeys.includes(key))          return doKey("DEL");
+    if (ignoreKeys.includes(key))       return;
+    if (/^[ \-\p{L}\p{N}]$/u.test(key)) return doKey(key);
     // anything else terminates the search and used normally
     doStop();
     return false;
