@@ -1,21 +1,21 @@
 :root {
   --page-margin: 2ex; --fg: #fff;
-  --volume1: 0; --volume2: 0; --volcolor: #0000;
+  --volume1: 0; --volume2: 0; --volcolor: #0000; --beat: 0deg;
 }
 :root.bigviz { --fg: #666; }
 
 body {
-  background: #101; color: var(--fg); font-family: Arial, sans-serif;
+  background-color: #101; color: var(--fg); font-family: Arial, sans-serif;
   margin: var(--page-margin);
 }
 code, pre { font-size: 1em; font-family: Consolas, monospace, monospace; }
 
 .itemlist {
   width: 49%; --height: calc(99vh - 2 * var(--page-margin));
-  background: #4044; padding: 0.5ex 0; overflow: hidden scroll;
+  background-color: #4044; padding: 0.5ex 0; overflow: hidden scroll;
 }
-.itemlist.drag-to { background: #8084; }
-body.flashy .itemlist { background: var(--volcolor); }
+.itemlist.drag-to { background-color: #8084; }
+body.flashy .itemlist { background-color: var(--volcolor); }
 #main  { float: left;  margin-top: 4.5ex; height: calc(var(--height) - 4.5ex); }
 #plist { float: right; margin-top: 11.5ex; /* +0.5ex from .itemlist */
          height: calc(var(--height) -  11ex); }
@@ -34,8 +34,8 @@ body.flashy .itemlist { background: var(--volcolor); }
 .subs { overflow-x: clip; } /* some rendering bug when search is focused? */
 
 .item { cursor: pointer; border-radius: 0.5ex; white-space: nowrap; }
-.item:focus { background: #8224; outline: none; }
-.item:hover { background: #4224; }
+.item:focus { background-color: #8224; outline: none; }
+.item:hover { background-color: #4224; }
 
 .item.dir { font-size: 150%; font-weight: bold; }
 .list.open > .item.dir { text-decoration: underline; }
@@ -46,8 +46,8 @@ body.flashy .itemlist { background: var(--volcolor); }
 .item.image { font-style: italic; color: #888; }
 .item.other, .item.video { color: #888; }
 
-.item.selected { background: #8228; }
-.item.altitem  { background: #8222; }
+.item.selected { background-color: #8228; }
+.item.altitem  { background-color: #8222; }
 .item.player {
   position: relative; color: #ff4; text-shadow: 2px 2px #000;
   transform: translateX(calc(10px * var(--volume1)))
@@ -73,15 +73,15 @@ body.flashy .itemlist { background: var(--volcolor); }
 .drag-to .item.dragitem { position: relative; }
 .drag-to .item.dragitem::before {
   content: ""; position: absolute; left: 0; right: 0; top: -2px; height: 4px;
-  background: #822; z-index: 1;
+  background-color: #822; z-index: 1;
 }
 .drag-to .item.dragitem.bottom::before { top: auto; bottom: -2px; }
 
 .control {
   position: fixed; top: var(--page-margin); white-space: nowrap;
-  background: #2228; border: 1px solid #3338; border-radius: 5px;
+  background-color: #2228; border: 1px solid #3338; border-radius: 5px;
 }
-body.flashy .control { background: var(--volcolor); }
+body.flashy .control { background-color: var(--volcolor); }
 
 .flex-line { display: flex; align-items: center; gap: 5px; }
 
@@ -90,7 +90,7 @@ body.flashy .control { background: var(--volcolor); }
   right: var(--page-margin); padding: 0.5ex 0.5em;
   width: calc(49vw - var(--page-margin) - 1em);
 }
-#control-panel.drag-to { background: #4448; }
+#control-panel.drag-to { background-color: #4448; }
 
 #sliders { z-index: 2; }
 
@@ -103,7 +103,7 @@ body.flashy .control { background: var(--volcolor); }
 
 #message {
   position: fixed; margin: var(--page-margin); font-size: 62.5%;
-  background: #633c; color: #000; box-shadow: 4px 4px 2px 0px #3368;
+  background-color: #633c; color: #000; box-shadow: 4px 4px 2px 0px #3368;
   border-radius: 5px; padding: 5px; pointer-events: none; white-space: pre;
   top: 0em; right: -8em; opacity: 0; transition: all 0.5s;
 }
@@ -126,9 +126,9 @@ body.flashy .control { background: var(--volcolor); }
 #viz-controls > div.on:after     { content: "⦿"; color: #fff; }
 #viz-controls > div.nexter:after { content: "⦿"; }
 
-#flashy { background: var(--volcolor); border-radius: 15%; }
+#flashy { background-color: var(--volcolor); border-radius: 15%; }
 
-.slider { height: 2ex; background: #0000; -webkit-appearance: none; }
+.slider { height: 2ex; background-color: #0000; -webkit-appearance: none; }
 #volume, #gain {
   width: 8ex;  margin: 1ex -3ex; transform: rotate(-90deg); vertical-align: top;
 }
@@ -136,16 +136,16 @@ body.flashy .control { background: var(--volcolor); }
           vertical-align: text-bottom; }
 .slider:focus { outline: none; }
 .slider::-webkit-slider-runnable-track {
-  background: #44cc; height: 4px; border-radius: 25px;
+  background-color: #44cc; height: 4px; border-radius: 25px;
 }
 .slider::-webkit-slider-thumb {
-  background: #cc8c; height: 12px; width: 12px; border-radius: 6px;
+  background-color: #cc8c; height: 12px; width: 12px; border-radius: 6px;
   margin-top: -4px; -webkit-appearance: none;
 }
 .slider:focus::-webkit-slider-runnable-track,
-.slider:hover::-webkit-slider-runnable-track { background: #44ff; }
+.slider:hover::-webkit-slider-runnable-track { background-color: #44ff; }
 .slider:focus::-webkit-slider-thumb,
-.slider:hover::-webkit-slider-thumb { background: #ff8f; }
+.slider:hover::-webkit-slider-thumb { background-color: #ff8f; }
 
 #playerbuttons { text-align: center; cursor: default; width: 10em; }
 #playerbuttons > div {
@@ -156,15 +156,16 @@ body.flashy .control { background: var(--volcolor); }
 #playerbuttons.playing > #p-play  { display: none; }
 
 #wave { position: relative; display: block; width: 10em; height: 2ex;
-        background: #444; cursor: col-resize; }
+        background-color: #444; cursor: col-resize; }
 #wave-image { width: 100%; height: 100%; image-rendering: pixelated; }
 #wave-needle {
-  position: absolute; top: 0; left: 0; width: 0.2%; height: 100%;
-  background-color: #f44;
+  position: absolute; top: 0; left: 0; width: 0.5%; height: 100%;
+  background-color: #f4fc;
+  transform: rotate(0.001deg); /* avoids pixel rounding */
 }
 :root.bigviz #wave {
   position: fixed; left: 0; bottom: 0vh; width: 100vw; height: 4vh;
-  background: #222; opacity: 0.75; z-index: 8;
+  background-color: #222; opacity: 0.75; z-index: 8;
 }
 
 #times { font-size: 130%; width: 5ex; margin-right: 1ex; cursor: pointer; }
@@ -173,7 +174,7 @@ body.flashy .control { background: var(--volcolor); }
 #dur  { border-top:    1px solid var(--fg); }
 
 #beatmode {
-  background: #226; border-radius: 50%; width: 1ex;
+  background-color: #226; border-radius: 50%; width: 1ex;
   position: fixed; right: 1ex; bottom: 0.5ex;
   line-height: 1em; text-align: center;
   font-size: 300%; transition: font-size 0.3s, filter 0.3s;
@@ -181,7 +182,8 @@ body.flashy .control { background: var(--volcolor); }
 #beatmode.on { font-size: 800%; }
 #beat {
   transform-origin: 50% 70%; border-radius: 50%; pointer-events: none;
-  background: #228c; color: #ff0c; opacity: 0;
+  transform: rotate(var(--beat));
+  background-color: #228c; color: #ff0c; opacity: 0;
 }
 
 #search-panel {
@@ -190,16 +192,16 @@ body.flashy .control { background: var(--volcolor); }
   text-align: right;
 }
 #search {
-  background: #222; color: var(--fg); border: 1px solid #444; padding: 0 0.5ex;
-  font-size: 120%;
+  background-color: #222; color: var(--fg); border: 1px solid #444;
+  padding: 0 0.5ex; font-size: 120%;
 }
 #search::placeholder { color: #666; text-shadow: none; }
 :root.bigviz #search::placeholder { color: #444; }
 #search:focus { outline: 3px solid #888; text-shadow: 2px 2px 4px #000; }
-#search.found { background: #242; }
-#search.not-found { background: #422; }
-:root.bigviz #search.found { background: #131; }
-:root.bigviz #search.not-found { background: #311; }
+#search.found { background-color: #242; }
+#search.not-found { background-color: #422; }
+:root.bigviz #search.found { background-color: #131; }
+:root.bigviz #search.not-found { background-color: #311; }
 
 .under {
   position: fixed; left: 0; top: 0; z-index: -9;
@@ -241,10 +243,10 @@ body.flashy .control { background: var(--volcolor); }
 
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track {
-  background: #6243; border-radius: 8px; box-shadow: inset 0 0 4px #0004; }
+  background-color: #6243; border-radius: 8px; box-shadow: inset 0 0 4px #0004; }
 ::-webkit-scrollbar-thumb {
-  background: #624c; border-radius: 8px; box-shadow: inset 0 0 4px #0008; }
-::-webkit-scrollbar-thumb:window-inactive { background: #6248; }
+  background-color: #624c; border-radius: 8px; box-shadow: inset 0 0 4px #0008; }
+::-webkit-scrollbar-thumb:window-inactive { background-color: #6248; }
 
 @font-face {
   font-family: "MediaButtons";

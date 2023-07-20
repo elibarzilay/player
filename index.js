@@ -89,6 +89,11 @@ const reddishPNG =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQ"
   + "VR42mP8f+ZMPQAIgQMYmyUZ4QAAAABJRU5ErkJggg==";
 
+const setStyleVar = (()=>{
+  const rootS = document.documentElement.style;
+  return (prop, val) => rootS.setProperty(prop, val);
+})();
+
 // ---- data ------------------------------------------------------------------
 
 let all = {};
@@ -906,7 +911,8 @@ const drawPlayerLine = (()=>{
       if (shown) { shown = false; $needle.style.display = "none"; }
     } else {
       if (!shown) { shown = true; $needle.style.display = ""; }
-      $needle.style.left = (100 * loc - half) + "%";
+      const pos = $needle.parentElement.clientWidth * loc - half;
+      $needle.style.left = `${pos}px`;
     }
   };
 })();
@@ -1527,7 +1533,6 @@ const visualizer = (()=>{
   const vizListeners = new Set();
   r.addListener = l => vizListeners.add(l);
   r.delListener = l => vizListeners.delete(l);
-  const rootS = document.documentElement.style;
   $c.addEventListener("click", bigvizMode);
   const c = $c.getContext("2d");
   const clear = r.clear = ()=> {
@@ -1561,10 +1566,10 @@ const visualizer = (()=>{
       if (!d) return;
       const [vol1, vol2] = d;
       r.vol = vol1;
-      rootS.setProperty("--volume1",  vol1.toFixed(3));
-      rootS.setProperty("--volume2",  vol2.toFixed(3));
+      setStyleVar("--volume1",  vol1.toFixed(3));
+      setStyleVar("--volume2",  vol2.toFixed(3));
       // vol1 is avg of the fft so it's smooth, vol2 is fast-responding
-      rootS.setProperty("--volcolor", r.col = hsl(80*vol2, 100, 50, 100*vol1));
+      setStyleVar("--volcolor", r.col = hsl(80*vol2, 100, 50, 100*vol1));
       vizListeners.forEach(l => l());
     }
   };
@@ -1684,7 +1689,7 @@ const beats = (()=>{
   const draw = ()=> {
     if (!isShown) { eltStyle.opacity = 1; isShown = true; }
     const R = antiSpike(1 - abs(2*beat01 - 1)) * (beat % 2 ? 60 : -60);
-    eltStyle.transform = `rotate(${R}deg)`;
+    setStyleVar("--beat", `${R}deg`);
     const L = spike(1 - beat01);
     eltStyle.backgroundColor = hsl(120, 100, L * visualizer.vol * 80, 50);
   };
