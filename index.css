@@ -41,9 +41,9 @@ body.flashy .itemlist { background-color: var(--volcolor); }
 
 .item.found { color: #bf6; text-shadow: 2px 2px 4px #bf6c; }
 
-.item.other { color: #888; }
 .item.image { font-style: italic; color: #888; }
 .item.other, .item.video { color: #888; }
+.item.otherbin { color: #444; }
 
 .item.selected { background-color: #8228; }
 .item.altitem  { background-color: #8222; }

@@ -21,7 +21,7 @@ const types = {
   mp3: "audio", ogg: "audio", m4a: "audio", wma: "audio",
   jpg: "image", png: "image",
   mpg: "video",
-  pdf: "other", txt: "other", flp: "other",
+  pdf: "other", txt: "other", flp: "otherbin",
 };
 
 // * Test mp3 errors with mp3val -si ...file...; fix with -f

@@ -105,7 +105,7 @@ const processData = data => {
     info.name =
       (isDir ? (info.name === "" ? "All" : info.name)
              : info.name.replace(/[.]([^.]+)$/,
-                                 info.type !== "other" ? "" : " ($1)"))
+                                 !info.type.startsWith("other") ? "" : " ($1)"))
         .replace(/^(\d+)-/, "$1. ")
         .replace(/_/g, " ").replace(/-/g, " – ");
     if (isDir) {
@@ -476,17 +476,18 @@ const showOnly = (info = getInfo($.selected), focus = true) => {
 };
 
 const mainOrPlistOp = (e, elt = $.selected, info = getInfo(elt)) => {
-  stopEvent(e);
   if (e.ctrlKey && info.type !== "dir" && info.type !== "audio")
-    return window.open(info.path, "_blank");
+    return info.type !== "otherbin" && window.open(info.path, "_blank");
+  stopEvent(e);
   (e.ctrlKey ? plistOp : mainOp)(e, elt, info);
 };
 
 const mainOp = (e, elt = $.selected, info = getInfo(elt)) =>
-  info.type === "dir" ? (e.shiftKey ? expandDir(U, "toggle") : showOnly(info)) :
-  info.type === "audio" ? play(elt) :
-  info.type === "image" ? setBackgroundImage(info.path) :
-  window.open(info.path, "_blank");
+    info.type === "dir" ? (e.shiftKey ? expandDir(U, "toggle") : showOnly(info))
+  : info.type === "audio" ? play(elt)
+  : info.type === "image" ? setBackgroundImage(info.path)
+  : info.type === "other" ? window.open(info.path, "_blank")
+  : undefined;
 
 const bind = (keys, op, filter) =>
   (isArray(keys) ? keys : [keys]).forEach(k => {
