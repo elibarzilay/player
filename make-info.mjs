@@ -23,13 +23,14 @@ const types = {
 
 // ----------------------------------------------------------------------------
 
-import { join, basename, dirname, relative } from "path";
-import * as fs from "fs";
-import * as os from "os";
+import { join, basename, dirname, relative } from "node:path";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import { exit, chdir, env, stdout } from "node:process";
 
-const failWith = msg => { console.error(`Error, ${msg}`); process.exit(1); };
+const failWith = msg => { console.error(`Error, ${msg}`); exit(1); };
 
-import { fileURLToPath } from "url";
+import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const home = path => "~/" + relative(os.homedir(), path);
@@ -40,7 +41,7 @@ const newerFile = (file1, file2) => {
   return s1 && s2 && s1.mtimeMs > s2.mtimeMs;
 };
 
-import * as zlib from "zlib";
+import * as zlib from "node:zlib";
 const readFile = file => {
   const tryReading = (file, decompress) => {
     const st = fs.statSync(file, { throwIfNoEntry: false });
@@ -62,12 +63,25 @@ const writeFile = (file, contents) =>
     : file.endsWith(".gz") ? zlib.gzipSync(contents)
     : contents);
 
-import { spawnSync } from "child_process";
+const findExe = exe => {
+  for (const path of env.PATH.split(":")) {
+    const exePath = join(path, exe);
+    if (fs.existsSync(exePath)) return exePath;
+  }
+  failWith(`${exe} not found in \$PATH`);
+};
+
+import { spawnSync } from "node:child_process";
 const runGeneric = stdio => (cmd, ...args) => {
-  const p = spawnSync(cmd, args, { stdio });
-  if (p.status) failWith(`${cmd} failed with error code: ${p.status}`);
-  if (p.signal) failWith(`${cmd} aborted with signal: ${p.signal}`);
-  if (p.error) failWith(`${cmd} errored: ${p.error.message ?? p.error}`);
+  const q = str => str.match(/["\\]/) ? JSON.stringify(str)
+                 : str.match(/[ $'{}]/) ? '"' + str + '"'
+                 : str;
+  const cmdExe = findExe(cmd);
+  console.log(`\$ ${q(cmdExe)} ${args.map(q).join(" ")}`)
+  const p = spawnSync(cmdExe, args, { stdio });
+  if (p.status) failWith(`${cmdExe} failed with error code: ${p.status}`);
+  if (p.signal) failWith(`${cmdExe} aborted with signal: ${p.signal}`);
+  if (p.error) failWith(`${cmdExe} errored: ${p.error.message ?? p.error}`);
   const hasOut = stdio[1] === "pipe", hasErr = stdio[2] === "pipe";
   const out = hasOut && p.stdout.toString().trim();
   const err = hasErr && p.stderr.toString().trim();
@@ -81,6 +95,9 @@ let parallelJobs = null;
 const PArg = str => ({ arg: str });
 const runParallel = (...xs) => cb => {
   const bad = what => failWith(`parallel call with ${what}: ${xs.join(", ")}`);
+  if (!xs.length) bad(`empty command line`);
+  if (typeof xs[0] !== "string") bad(`command must be a literal string`);
+  xs[0] = findExe(xs[0]);
   let args = xs.filter(x => x.arg);
   if (!args.length) bad(`no args`);
   const cmd = xs.map(x =>
@@ -222,11 +239,11 @@ const mkCounter = (n, what) => {
     if (n === null) return;
     if (done || --n < 0) {
       n = null;
-      return process.stdout.write(`${what} ... done\n`);
+      return stdout.write(`${what} ... done\n`);
     }
     const pct = Math.ceil(100 * n / totalPaths);
     if (last === pct) return;
-    process.stdout.write(`${what} ...${String(last = pct).padStart(3)}%\r`);
+    stdout.write(`${what} ...${String(last = pct).padStart(3)}%\r`);
   };
 };
 
@@ -320,8 +337,8 @@ const getAudioData = () => infoForEach("Reading metadata", false, info => {
   runParallel(
     "ffprobe", "-hide_banner", "-loglevel", "error", "-show_error",
     "-show_format", "-show_streams", "-show_programs", "-show_chapters",
-    "-show_private_data", "-print_format", "json", PArg(info.m.path))
-  (out => {
+    "-show_private_data", "-print_format", "json", PArg(info.m.path)
+  )(out => {
     info.m.audioData = cleanupData(JSON.parse(out));
     const streams =
           info.m.audioData.streams.filter(s => s.codec_type === "audio");
@@ -401,7 +418,8 @@ const genFiles = (genDir, ext, gen) => {
     // console.log(`  ${tgtExt}`); // done by parallel later
     fs.rmSync(tgt, { recursive: true, force: true });
     gen(src, tgt, () =>
-      newerFile(tgt, src) || failWith(`failed to generate ${home(tgt)}`));
+      newerFile(tgt, src) || failWith(`failed to generate ${home(tgt)}`
+                                      + ` (more likely bad timestamp on music file)`));
   };
   rmLoop(genDir, info.children);
   mkLoop(info);
@@ -418,16 +436,20 @@ const imageGen = [
   `[t][l]overlay=y=main_h/2:format=auto`,
 ].join(";");
 const mkImage = (src, tgt, done) =>
-  runParallel("ffmpeg", "-hide_banner", "-loglevel", "error",
-              "-i", PArg(src), "-filter_complex", imageGen, "-frames:v", "1",
-              PArg(tgt))(done);
+  runParallel(
+    "ffmpeg", "-hide_banner", "-loglevel", "error",
+    "-i", PArg(src), "-filter_complex", imageGen, "-frames:v", "1",
+    PArg(tgt)
+  )(done);
 
 // Note: `aubiotrack` is a binary, `aubio beat` is a python script. Also, the
 // man page is outdated, the default bufsize/hopsize are 1024/512 (= the listed
 // default for `aubio beat`). Also, ignore some stderr lines that are
 // unavoidable(?).
 const mkAubio = exe => (src, tgt, done) => {
-  runParallel(exe, "-i", PArg(src))((out, err) => {
+  runParallel(
+    exe, "-i", PArg(src)
+  )((out, err) => {
     if (!out.match(/^\d+\.\d+\n/)) failWith(`failed to get beats from: ${src}`);
     const realErr = (err + "\n")
           .replace(/.*timestamps for (?:skipped|discarded) samples.*\n/g, "")
@@ -441,7 +463,7 @@ const mkAubio = exe => (src, tgt, done) => {
 const mkBeats = mkAubio("aubiotrack");
 const mkOnsets = mkAubio("aubioonset"); // might be useful for visualizations?
 
-process.chdir(conf.musicDir);
+chdir(conf.musicDir);
 
 const info = getInfo(null, true);
 console.log(`${totalPaths} paths found`);
