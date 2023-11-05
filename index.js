@@ -5,7 +5,7 @@
 const autoExpandItems = 30;
 const pgSize = 10;
 const bigSkip = 60, smallSkip = 5, smallerSkipDiv = 2;
-const fadeToFreq = 20, pauseFade = 0.5, switchFade = 0.25; // time for 0-1 fade
+const fadeToFreq = 20, pauseFade = 1, switchFade = 0.25; // time for 0-1 fade
 const imageDelayTime = 2, imageCycleTime = 60, imageExplicitTime = 120;
 const tickerTime = 60, tickerSwapTime = 1;
 const analyzerSettings = { smoothingTimeConstant: 0.5, fftSize: 2 * 512 };

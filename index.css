@@ -2,7 +2,6 @@
   --page-margin: 2ex; --fg: #fff;
   --volume1: 0; --volume2: 0; --volcolor: #0000; --beat: 0deg;
 }
-:root.bigviz { --fg: #666; }
 
 body {
   background-color: #101; color: var(--fg); font-family: Arial, sans-serif;
@@ -96,10 +95,7 @@ body.flashy .control { background-color: var(--volcolor); }
 
 #viz-container { margin: -20% -10px -20% -150px; flex-grow: 1; }
 #visualization { margin-top: 50px; height: 16ex; width: 100%; }
-:root.bigviz #visualization {
-  position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; margin: 0;
-  pointer-events: none; opacity: 0.75; z-index: 9;
-}
+/* See :root.bigviz #visualization below */
 
 #message {
   position: fixed; margin: var(--page-margin); font-size: 62.5%;
@@ -156,17 +152,23 @@ body.flashy .control { background-color: var(--volcolor); }
 #playerbuttons.playing > #p-play  { display: none; }
 
 #wave { position: relative; display: block; width: 10em; height: 2ex;
-        background-color: #444; cursor: col-resize; }
+        background-color: #444a; cursor: col-resize; }
 #wave-image { width: 100%; height: 100%; image-rendering: pixelated; }
 #wave-needle {
-  position: absolute; top: 0; left: 0; width: 0.5%; height: 100%;
+  position: absolute; top: 0; left: 0; height: 100%;
+  width: 2px; margin-left: -1px; /* center the needle around it's left point */
   background-color: #f4fc;
-  transform: rotate(0.001deg); /* avoids pixel rounding */
+  transform: rotate(0.0001deg); /* avoids pixel rounding */
 }
-:root.bigviz #wave {
-  position: fixed; left: 0; bottom: 0vh; width: 100vw; height: 4vh;
-  background-color: #222; opacity: 0.75; z-index: 8;
+
+/* bigviz mode: moves #visualization & #wave over whole screen */
+:root.bigviz #visualization, :root.bigviz #wave {
+  position: fixed; left: 0; width: 100vw; padding: 0; margin: 0; z-index: 9;
+  background-color: #222a; /* instead of opacity for all */
+  backdrop-filter: brightness(0.5) blur(1px);
 }
+:root.bigviz #visualization { top: 0; height: 96vh; pointer-events: none; }
+:root.bigviz #wave { bottom: 0; height: 4vh; }
 
 #times { font-size: 130%; width: 5ex; margin-right: 1ex; cursor: pointer; }
 #times > div { text-align: right; }
@@ -196,12 +198,9 @@ body.flashy .control { background-color: var(--volcolor); }
   padding: 0 0.5ex; font-size: 120%;
 }
 #search::placeholder { color: #666; text-shadow: none; }
-:root.bigviz #search::placeholder { color: #444; }
 #search:focus { outline: 3px solid #888; text-shadow: 2px 2px 4px #000; }
 #search.found { background-color: #242; }
 #search.not-found { background-color: #422; }
-:root.bigviz #search.found { background-color: #131; }
-:root.bigviz #search.not-found { background-color: #311; }
 
 .under {
   position: fixed; left: 0; top: 0; z-index: -9;

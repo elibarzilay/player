@@ -8,6 +8,13 @@ const conf = {
   imagesDir: "images",
   beatsDir:  "beats",
   imageSize: "1920x160",
+  // For colors,
+  // * choose opposites
+  //   (https://www.canva.com/colors/color-wheel/)
+  // * that both look at a similar level of brightness
+  //   (https://contrastchecker.online/color-relative-luminance-calculator)
+  // * with a reddish for the right channel
+  leftColor: "#009BFF", rightColor: "#FF6400",
 };
 
 const types = {
@@ -428,13 +435,13 @@ const genFiles = (genDir, ext, gen) => {
 
 const imageGen = [
   // https://trac.ffmpeg.org/wiki/Waveform
-  `[0:a]compand,channelsplit=channel_layout=stereo[FL][FR]`,
-  `[FR]showwavespic=s=${conf.imageSize}:colors=white,crop=iw:ih/2:0:0[r]`,
-  `[FL]showwavespic=s=${conf.imageSize}:colors=white,crop=iw:ih/2:0:ih/2[l]`,
-  `color=s=${conf.imageSize}:color=#00000000[bg]`,
-  `[bg][r]overlay=format=auto[t]`,
-  `[t][l]overlay=y=main_h/2:format=auto`,
-].join(";");
+  // https://stackoverflow.com/a/32276471 (slightly better)
+  `[0:a]`,
+  // `aformat=channel_layouts=mono,`, // mono output (needs only one color)
+  // `compand,`, // makes dynamic range less flat (see problem in MyStuff/19)
+  `showwavespic=s=${conf.imageSize}:colors=${conf.leftColor}|${conf.rightColor}`,
+  `,drawbox=x=(iw-w)/2:y=(ih-h)/2:w=iw:h=1:color=#ff000050` // white line through
+].join("");
 const mkImage = (src, tgt, done) =>
   runParallel(
     "ffmpeg", "-hide_banner", "-loglevel", "error",
